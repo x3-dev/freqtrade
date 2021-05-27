@@ -16,6 +16,7 @@ if [ "${GITHUB_EVENT_NAME}" = "schedule" ]; then
     docker buildx build \
         --cache-to=type=registry,ref=${CACHE_TAG} \
         -f Dockerfile.armhf \
+        --append \
         --platform ${PI_PLATFORM} \
         -t ${IMAGE_NAME}:${TAG} --push .
 else
@@ -25,10 +26,13 @@ else
     docker buildx build \
         --cache-from=type=registry,ref=${CACHE_TAG} \
         --cache-to=type=registry,ref=${CACHE_TAG} \
+        --append \
         -f Dockerfile.armhf \
         --platform ${PI_PLATFORM} \
         -t ${IMAGE_NAME}:${TAG} --push .
 fi
+
+docker images
 
 if [ $? -ne 0 ]; then
     echo "failed building image"
