@@ -19,7 +19,7 @@ if [ "${GITHUB_EVENT_NAME}" = "schedule" ]; then
         --cache-to=type=registry,ref=${CACHE_TAG} \
         -f docker/Dockerfile.armhf \
         --platform ${PI_PLATFORM} \
-        -t ${IMAGE_NAME}:${TAG} .
+        -t ${IMAGE_NAME}:${TAG} --push .
 else
     echo "event ${GITHUB_EVENT_NAME}: building with cache"
     # Pull last build to avoid rebuilding the whole image
@@ -29,7 +29,7 @@ else
         --cache-to=type=registry,ref=${CACHE_TAG} \
         -f docker/Dockerfile.armhf \
         --platform ${PI_PLATFORM} \
-        -t ${IMAGE_NAME}:${TAG} .
+        -t ${IMAGE_NAME}:${TAG} --push .
 fi
 
 docker images
