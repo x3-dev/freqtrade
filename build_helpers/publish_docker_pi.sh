@@ -17,7 +17,7 @@ if [ "${GITHUB_EVENT_NAME}" = "schedule" ]; then
     echo "event ${GITHUB_EVENT_NAME}: full rebuild - skipping cache"
     docker buildx build \
         --cache-to=type=registry,ref=${CACHE_TAG} \
-        -f Dockerfile.armhf \
+        -f docker/Dockerfile.armhf \
         --platform ${PI_PLATFORM} \
         -t ${IMAGE_NAME}:${TAG} .
 else
@@ -27,7 +27,7 @@ else
     docker buildx build \
         --cache-from=type=registry,ref=${CACHE_TAG} \
         --cache-to=type=registry,ref=${CACHE_TAG} \
-        -f Dockerfile.armhf \
+        -f docker/Dockerfile.armhf \
         --platform ${PI_PLATFORM} \
         -t ${IMAGE_NAME}:${TAG} .
 fi
