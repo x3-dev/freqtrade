@@ -7,7 +7,7 @@ TAG_ORIG=$(echo "${BRANCH_NAME}" | sed -e "s/\//_/g")
 TAG="${TAG_ORIG}_pi"
 
 PI_PLATFORM="linux/arm/v7"
-echo "Running for ${TAG}"
+echo "Running for ${TAG_ORIG}"
 CACHE_TAG=freqtradeorg/freqtrade_cache:${TAG}_cache
 
 # Add commit and commit_message to docker container
@@ -19,7 +19,7 @@ if [ "${GITHUB_EVENT_NAME}" = "schedule" ]; then
         --cache-to=type=registry,ref=${CACHE_TAG} \
         -f Dockerfile.armhf \
         --platform ${PI_PLATFORM} \
-        -t ${IMAGE_NAME}:${TAG} --push .
+        -t ${IMAGE_NAME}:${TAG} .
 else
     echo "event ${GITHUB_EVENT_NAME}: building with cache"
     # Pull last build to avoid rebuilding the whole image
@@ -29,13 +29,13 @@ else
         --cache-to=type=registry,ref=${CACHE_TAG} \
         -f Dockerfile.armhf \
         --platform ${PI_PLATFORM} \
-        -t ${IMAGE_NAME}:${TAG} --push .
+        -t ${IMAGE_NAME}:${TAG} .
 fi
 
 docker images
 
-docker manifest create freqtradeorg/freqtrade:${TAG}_multi ${IMAGE_NAME}:${TAG_ORIG} ${IMAGE_NAME}:${TAG}
-docker manifest push freqtradeorg/freqtrade:${TAG}_multi
+docker manifest create freqtradeorg/freqtrade:${TAG_ORIG} ${IMAGE_NAME}:${TAG_ORIG} ${IMAGE_NAME}:${TAG}
+docker manifest push freqtradeorg/freqtrade:${TAG_ORIG}
 
 docker images
 
