@@ -19,7 +19,7 @@ if [ "${GITHUB_EVENT_NAME}" = "schedule" ]; then
         --cache-to=type=registry,ref=${CACHE_TAG} \
         -f docker/Dockerfile.armhf \
         --platform ${PI_PLATFORM} \
-        -t ${IMAGE_NAME}:${TAG} .
+        -t ${IMAGE_NAME}:${TAG} --push .
 else
     echo "event ${GITHUB_EVENT_NAME}: building with cache"
     # Pull last build to avoid rebuilding the whole image
@@ -29,12 +29,14 @@ else
         --cache-to=type=registry,ref=${CACHE_TAG} \
         -f docker/Dockerfile.armhf \
         --platform ${PI_PLATFORM} \
-        -t ${IMAGE_NAME}:${TAG} .
+        -t ${IMAGE_NAME}:${TAG} --push .
 fi
 
 docker images
 
 # Create multiarch image
+# Make sure that all images contained here are pushed to github first.
+# Otherwise installation might fail.
 
 docker manifest create freqtradeorg/freqtrade:${TAG_ORIG} ${IMAGE_NAME}:${TAG_ORIG} ${IMAGE_NAME}:${TAG}
 docker manifest push freqtradeorg/freqtrade:${TAG_ORIG}
