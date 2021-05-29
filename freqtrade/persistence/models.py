@@ -8,13 +8,14 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import (Boolean, Column, DateTime, Float, ForeignKey, Integer, String,
-                        create_engine, desc, func, inspect, event, MetaData)
+                        create_engine, desc, func, inspect, event, DDL)
 from sqlalchemy.exc import NoSuchModuleError, ProgrammingError
 from sqlalchemy.orm import Query, declarative_base, relationship, scoped_session, sessionmaker
 from sqlalchemy.pool import StaticPool
 from sqlalchemy.sql import exists, select
 from sqlalchemy.schema import CreateSchema
 from sqlalchemy.sql.schema import UniqueConstraint
+from sqlalchemy_utils import database_exists, create_database
 
 from freqtrade.constants import DATETIME_PRINT_FORMAT
 from freqtrade.exceptions import DependencyException, OperationalException
@@ -23,9 +24,7 @@ from freqtrade.persistence.migrations import check_migrate
 
 logger = logging.getLogger(__name__)
 
-
 _DECL_BASE: Any = declarative_base()
-_SQL_DOCS_URL = 'http://docs.sqlalchemy.org/en/latest/core/engines.html#database-urls'
 
 
 def init_db(db_url: str, __schema__: str, clean_open_orders: bool = False) -> None:
@@ -34,51 +33,71 @@ def init_db(db_url: str, __schema__: str, clean_open_orders: bool = False) -> No
     registers all known command handlers
     and starts polling for message updates
     :param db_url: Database to use
+    :param __schema__: Database schema to use
     :param clean_open_orders: Remove open orders from the database.
         Useful for dry-run or if all orders have been reset on the exchange.
     :return: None
     """
+
     kwargs = {}
 
     if db_url == 'sqlite://':
         kwargs.update({
             'poolclass': StaticPool,
         })
+
     # Take care of thread ownership
     if db_url.startswith('sqlite://'):
         kwargs.update({
             'connect_args': {'check_same_thread': False},
         })
 
+    if db_url.startswith('postgresql'):
+        kwargs.update({
+            'connect_args': {'options': f'-csearch_path={__schema__}'},
+        })
+
     try:
         engine = create_engine(db_url, future=True, **kwargs)
     except NoSuchModuleError:
-        raise OperationalException(f"Given value for db_url: '{db_url}' "
-                                   f"is no valid database URL! (See {_SQL_DOCS_URL})")
+        raise OperationalException(f"Given value for db_url: '{db_url}' is no valid database URL!"
+            f" (See http://docs.sqlalchemy.org/en/latest/core/engines.html#database-urls)"
+        )
 
     """
         Hack to manage multiple bots in a single database using the advantage of PostgreSql schemata
         Docs: https://www.postgresql.org/docs/13/ddl-schemas.html
-        Caveats: if running bot through unix socket by setting db_url='postgresql+psycopg2:///dbname'
-        the user running bot script eg. freqtrade must exist as ROLE in PostgreSql
+        Install: psycopg2 sqlalchemy-utils
+        Caveats:
+            - if running bot through unix socket by setting db_url='postgresql+psycopg2:///dbname' the user running bot script eg. freqtrade must exist as ROLE in PostgreSql
+            - if database is not exists and should be created by bot PostgreSql ROLE must have create privileges
         Summary:
             - each bot is using its own namespace/schema with its tables
             - schema is created on db_init method while bot is starting
             - schema name is adopted through configuration variable 'bot_name'
     """
+
+    if not database_exists(engine.url):
+        logger.info(f"database '{engine.url.database}' not exists, creating")
+        try:
+            create_database(engine.url)
+        except Exception as err:
+            raise OperationalException(f"Error occured while creating database: {err}")
+
     if db_url.startswith('postgresql'):
-        print(f"{__schema__} schema exists, continue")
-        _DECL_BASE(metadata=MetaData(schema=__schema__))
         if not __schema__ or __schema__ is None:
             raise OperationalException(
                 f"Error occured: 'schema name is not provided, probably configuration file has no ´bot_name´ entry!'"
             )
         if __schema__.upper().startswith('PG_'):
-            raise OperationalException(f"Error occured: 'schema name schould not start with PG_'")
+            raise OperationalException(f"Error occured: schema name should not start with 'PG_'")
 
+        _DECL_BASE.metadata.schema = __schema__
         if not __schema__ in inspect(engine).get_schema_names():
+            logger.info(f"'{__schema__}' schema not exists, creating")
             try:
                 event.listen(_DECL_BASE.metadata, 'before_create', CreateSchema(__schema__))
+                # event.listen(Order.__table__, 'after_create', DDL(f"SELECT create_hypertable('{Order.__tablename__}', 'order_date');") )
             except ProgrammingError as err:
                 raise OperationalException(f"Error occured: '{err}'")
 
