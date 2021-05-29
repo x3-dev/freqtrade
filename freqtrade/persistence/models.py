@@ -1,23 +1,25 @@
 """
-This module contains the class to persist trades into SQLite
+This module contains the class to persist trades into the database
 """
+
 import logging
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import (Boolean, Column, DateTime, Float, ForeignKey, Integer, String,
-                        create_engine, desc, func, inspect)
-from sqlalchemy.exc import NoSuchModuleError
+                        create_engine, desc, func, inspect, event, MetaData)
+from sqlalchemy.exc import NoSuchModuleError, ProgrammingError
 from sqlalchemy.orm import Query, declarative_base, relationship, scoped_session, sessionmaker
 from sqlalchemy.pool import StaticPool
+from sqlalchemy.sql import exists, select
+from sqlalchemy.schema import CreateSchema
 from sqlalchemy.sql.schema import UniqueConstraint
 
 from freqtrade.constants import DATETIME_PRINT_FORMAT
 from freqtrade.exceptions import DependencyException, OperationalException
 from freqtrade.misc import safe_value_fallback
 from freqtrade.persistence.migrations import check_migrate
-
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +28,7 @@ _DECL_BASE: Any = declarative_base()
 _SQL_DOCS_URL = 'http://docs.sqlalchemy.org/en/latest/core/engines.html#database-urls'
 
 
-def init_db(db_url: str, clean_open_orders: bool = False) -> None:
+def init_db(db_url: str, __schema__: str, clean_open_orders: bool = False) -> None:
     """
     Initializes this module with the given config,
     registers all known command handlers
@@ -53,6 +55,32 @@ def init_db(db_url: str, clean_open_orders: bool = False) -> None:
     except NoSuchModuleError:
         raise OperationalException(f"Given value for db_url: '{db_url}' "
                                    f"is no valid database URL! (See {_SQL_DOCS_URL})")
+
+    """
+        Hack to manage multiple bots in a single database using the advantage of PostgreSql schemata
+        Docs: https://www.postgresql.org/docs/13/ddl-schemas.html
+        Caveats: if running bot through unix socket by setting db_url='postgresql+psycopg2:///dbname'
+        the user running bot script eg. freqtrade must exist as ROLE in PostgreSql
+        Summary:
+            - each bot is using its own namespace/schema with its tables
+            - schema is created on db_init method while bot is starting
+            - schema name is adopted through configuration variable 'bot_name'
+    """
+    if db_url.startswith('postgresql'):
+        print(f"{__schema__} schema exists, continue")
+        _DECL_BASE(metadata=MetaData(schema=__schema__))
+        if not __schema__ or __schema__ is None:
+            raise OperationalException(
+                f"Error occured: 'schema name is not provided, probably configuration file has no ´bot_name´ entry!'"
+            )
+        if __schema__.upper().startswith('PG_'):
+            raise OperationalException(f"Error occured: 'schema name schould not start with PG_'")
+
+        if not __schema__ in inspect(engine).get_schema_names():
+            try:
+                event.listen(_DECL_BASE.metadata, 'before_create', CreateSchema(__schema__))
+            except ProgrammingError as err:
+                raise OperationalException(f"Error occured: '{err}'")
 
     # https://docs.sqlalchemy.org/en/13/orm/contextual.html#thread-local-scope
     # Scoped sessions proxy requests to the appropriate thread-local session.
