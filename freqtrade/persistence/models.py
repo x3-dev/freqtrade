@@ -2,13 +2,14 @@
 This module contains the class to persist trades into the database
 """
 
+import re
 import logging
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import (Boolean, Column, DateTime, Float, ForeignKey, Integer, String,
-                        create_engine, desc, func, inspect, event, DDL)
+                        create_engine, desc, func, inspect, event, text, DDL)
 from sqlalchemy.exc import NoSuchModuleError, ProgrammingError
 from sqlalchemy.orm import Query, declarative_base, relationship, scoped_session, sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -27,32 +28,33 @@ logger = logging.getLogger(__name__)
 _DECL_BASE: Any = declarative_base()
 
 
-def init_db(db_url: str, __schema__: str, clean_open_orders: bool = False) -> None:
+def init_db(db_url: str, schema: str, clean_open_orders: bool = False) -> None:
     """
     Initializes this module with the given config,
     registers all known command handlers
     and starts polling for message updates
     :param db_url: Database to use
-    :param __schema__: Database schema to use
+    :param schema: Database schema to use
     :param clean_open_orders: Remove open orders from the database.
         Useful for dry-run or if all orders have been reset on the exchange.
     :return: None
     """
 
     kwargs = {}
-
-    if db_url == 'sqlite://':
-        kwargs.update({
-            'poolclass': StaticPool,
-        })
+    __schema__ = re.sub('[\W_]+', '_', schema).lower()
 
     # Take care of thread ownership
     if db_url.startswith('sqlite://'):
         kwargs.update({
             'connect_args': {'check_same_thread': False},
         })
+        if db_url == 'sqlite://':
+            kwargs.update({
+                'poolclass': StaticPool,
+            })
 
     if db_url.startswith('postgresql'):
+        _DECL_BASE.metadata.schema = __schema__
         kwargs.update({
             'connect_args': {'options': f'-csearch_path={__schema__}'},
         })
@@ -78,7 +80,7 @@ def init_db(db_url: str, __schema__: str, clean_open_orders: bool = False) -> No
     """
 
     if not database_exists(engine.url):
-        logger.info(f"database '{engine.url.database}' not exists, creating")
+        logger.info(f"database '{engine.url.database}' does not exists, creating")
         try:
             create_database(engine.url)
         except Exception as err:
@@ -89,15 +91,13 @@ def init_db(db_url: str, __schema__: str, clean_open_orders: bool = False) -> No
             raise OperationalException(
                 f"Error occured: 'schema name is not provided, probably configuration file has no ´bot_name´ entry!'"
             )
-        if __schema__.upper().startswith('PG_'):
-            raise OperationalException(f"Error occured: schema name should not start with 'PG_'")
+        if __schema__.startswith('pg_'):
+            raise OperationalException(f"Error occured: schema name should not start with 'pg_'")
 
-        _DECL_BASE.metadata.schema = __schema__
         if not __schema__ in inspect(engine).get_schema_names():
-            logger.info(f"'{__schema__}' schema not exists, creating")
+            logger.info(f"schema '{__schema__}' does not exists, creating")
             try:
                 event.listen(_DECL_BASE.metadata, 'before_create', CreateSchema(__schema__))
-                # event.listen(Order.__table__, 'after_create', DDL(f"SELECT create_hypertable('{Order.__tablename__}', 'order_date');") )
             except ProgrammingError as err:
                 raise OperationalException(f"Error occured: '{err}'")
 
@@ -111,7 +111,10 @@ def init_db(db_url: str, __schema__: str, clean_open_orders: bool = False) -> No
 
     previous_tables = inspect(engine).get_table_names()
     _DECL_BASE.metadata.create_all(engine)
+    # TimescaleDb need CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
+    event.listen(Order.__table__, 'after_create', DDL(f"SELECT create_hypertable('{Order.__tablename__}', 'order_date');"))
     check_migrate(engine, decl_base=_DECL_BASE, previous_tables=previous_tables)
+
 
     # Clean dry_run DB if the db is not in-memory
     if clean_open_orders and db_url != 'sqlite://':
