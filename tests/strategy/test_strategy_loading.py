@@ -129,13 +129,16 @@ def test_strategy_override_minimal_roi(caplog, default_conf):
     default_conf.update({
         'strategy': 'DefaultStrategy',
         'minimal_roi': {
+            "20": 0.1,
             "0": 0.5
         }
     })
     strategy = StrategyResolver.load_strategy(default_conf)
 
     assert strategy.minimal_roi[0] == 0.5
-    assert log_has("Override strategy 'minimal_roi' with value in config file: {'0': 0.5}.", caplog)
+    assert log_has(
+        "Override strategy 'minimal_roi' with value in config file: {'20': 0.1, '0': 0.5}.",
+        caplog)
 
 
 def test_strategy_override_stoploss(caplog, default_conf):
@@ -287,14 +290,12 @@ def test_strategy_override_use_sell_signal(caplog, default_conf):
     assert strategy.use_sell_signal
     assert isinstance(strategy.use_sell_signal, bool)
     # must be inserted to configuration
-    assert 'use_sell_signal' in default_conf['ask_strategy']
-    assert default_conf['ask_strategy']['use_sell_signal']
+    assert 'use_sell_signal' in default_conf
+    assert default_conf['use_sell_signal']
 
     default_conf.update({
         'strategy': 'DefaultStrategy',
-        'ask_strategy': {
-            'use_sell_signal': False,
-        },
+        'use_sell_signal': False,
     })
     strategy = StrategyResolver.load_strategy(default_conf)
 
@@ -312,14 +313,12 @@ def test_strategy_override_use_sell_profit_only(caplog, default_conf):
     assert not strategy.sell_profit_only
     assert isinstance(strategy.sell_profit_only, bool)
     # must be inserted to configuration
-    assert 'sell_profit_only' in default_conf['ask_strategy']
-    assert not default_conf['ask_strategy']['sell_profit_only']
+    assert 'sell_profit_only' in default_conf
+    assert not default_conf['sell_profit_only']
 
     default_conf.update({
         'strategy': 'DefaultStrategy',
-        'ask_strategy': {
-            'sell_profit_only': True,
-        },
+        'sell_profit_only': True,
     })
     strategy = StrategyResolver.load_strategy(default_conf)
 

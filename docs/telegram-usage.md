@@ -95,6 +95,7 @@ Example configuration showing the different settings:
         "buy_fill": "off",
         "sell_fill": "off"
     },
+    "reload": true,
     "balance_dust_level": 0.01
 },
 ```
@@ -105,6 +106,7 @@ Example configuration showing the different settings:
 
 
 `balance_dust_level` will define what the `/balance` command takes as "dust" - Currencies with a balance below this will be shown.
+`reload` allows you to disable reload-buttons on selected messages.
 
 ## Create a custom keyboard (command shortcut buttons)
 
@@ -163,7 +165,7 @@ official commands. You can ask at any moment for help with `/help`.
 | `/count` | Displays number of trades used and available
 | `/locks` | Show currently locked pairs.
 | `/unlock <pair or lock_id>` | Remove the lock for this pair (or for this lock id).
-| `/profit` | Display a summary of your profit/loss from close trades and some stats about your performance
+| `/profit [<n>]` | Display a summary of your profit/loss from close trades and some stats about your performance, over the last n days (all trades by default)
 | `/forcesell <trade_id>` | Instantly sells the given trade  (Ignoring `minimum_roi`).
 | `/forcesell all` | Instantly sells all open trades (Ignoring `minimum_roi`).
 | `/forcebuy <pair> [rate]` | Instantly buys the given pair. Rate is optional. (`forcebuy_enable` must be set to True)

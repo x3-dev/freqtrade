@@ -16,12 +16,11 @@ from freqtrade.data.btanalysis import BT_DATA_COLUMNS, evaluate_result_multi
 from freqtrade.data.converter import clean_ohlcv_dataframe
 from freqtrade.data.dataprovider import DataProvider
 from freqtrade.data.history import get_timerange
+from freqtrade.enums import RunMode, SellType
 from freqtrade.exceptions import DependencyException, OperationalException
 from freqtrade.optimize.backtesting import Backtesting
 from freqtrade.persistence import LocalTrade
 from freqtrade.resolvers import StrategyResolver
-from freqtrade.state import RunMode
-from freqtrade.strategy.interface import SellType
 from tests.conftest import (get_args, log_has, log_has_re, patch_exchange,
                             patched_configuration_load_config_file)
 
@@ -156,6 +155,7 @@ def test_setup_optimize_configuration_without_arguments(mocker, default_conf, ca
         'backtesting',
         '--config', 'config.json',
         '--strategy', 'DefaultStrategy',
+        '--export', 'none'
     ]
 
     config = setup_optimize_configuration(get_args(args), RunMode.BACKTEST)
@@ -173,7 +173,8 @@ def test_setup_optimize_configuration_without_arguments(mocker, default_conf, ca
     assert not log_has('Parameter --enable-position-stacking detected ...', caplog)
 
     assert 'timerange' not in config
-    assert 'export' not in config
+    assert 'export' in config
+    assert config['export'] == 'none'
     assert 'runmode' in config
     assert config['runmode'] == RunMode.BACKTEST
 
@@ -194,7 +195,6 @@ def test_setup_bt_configuration_with_arguments(mocker, default_conf, caplog) -> 
         '--enable-position-stacking',
         '--disable-max-market-positions',
         '--timerange', ':100',
-        '--export', '/bar/foo',
         '--export-filename', 'foo_bar.json',
         '--fee', '0',
     ]
@@ -224,7 +224,6 @@ def test_setup_bt_configuration_with_arguments(mocker, default_conf, caplog) -> 
     assert log_has('Parameter --timerange detected: {} ...'.format(config['timerange']), caplog)
 
     assert 'export' in config
-    assert log_has('Parameter --export detected: {} ...'.format(config['export']), caplog)
     assert 'exportfilename' in config
     assert isinstance(config['exportfilename'], Path)
     assert log_has('Storing backtest results to {} ...'.format(config['exportfilename']), caplog)
@@ -396,7 +395,7 @@ def test_backtesting_start_no_data(default_conf, mocker, caplog, testdatadir) ->
 
     default_conf['timeframe'] = "1m"
     default_conf['datadir'] = testdatadir
-    default_conf['export'] = None
+    default_conf['export'] = 'none'
     default_conf['timerange'] = '20180101-20180102'
 
     backtesting = Backtesting(default_conf)
@@ -417,7 +416,7 @@ def test_backtesting_no_pair_left(default_conf, mocker, caplog, testdatadir) -> 
 
     default_conf['timeframe'] = "1m"
     default_conf['datadir'] = testdatadir
-    default_conf['export'] = None
+    default_conf['export'] = 'none'
     default_conf['timerange'] = '20180101-20180102'
 
     with pytest.raises(OperationalException, match='No pair in whitelist.'):
@@ -441,7 +440,7 @@ def test_backtesting_pairlist_list(default_conf, mocker, caplog, testdatadir, ti
 
     default_conf['ticker_interval'] = "1m"
     default_conf['datadir'] = testdatadir
-    default_conf['export'] = None
+    default_conf['export'] = 'none'
     # Use stoploss from strategy
     del default_conf['stoploss']
     default_conf['timerange'] = '20180101-20180102'
@@ -466,7 +465,7 @@ def test_backtesting_pairlist_list(default_conf, mocker, caplog, testdatadir, ti
 
 
 def test_backtest__enter_trade(default_conf, fee, mocker) -> None:
-    default_conf['ask_strategy']['use_sell_signal'] = False
+    default_conf['use_sell_signal'] = False
     mocker.patch('freqtrade.exchange.Exchange.get_fee', fee)
     mocker.patch("freqtrade.exchange.Exchange.get_min_pair_stake_amount", return_value=0.00001)
     patch_exchange(mocker)
@@ -512,7 +511,7 @@ def test_backtest__enter_trade(default_conf, fee, mocker) -> None:
 
 
 def test_backtest_one(default_conf, fee, mocker, testdatadir) -> None:
-    default_conf['ask_strategy']['use_sell_signal'] = False
+    default_conf['use_sell_signal'] = False
     mocker.patch('freqtrade.exchange.Exchange.get_fee', fee)
     mocker.patch("freqtrade.exchange.Exchange.get_min_pair_stake_amount", return_value=0.00001)
     patch_exchange(mocker)
@@ -575,7 +574,7 @@ def test_backtest_one(default_conf, fee, mocker, testdatadir) -> None:
 
 
 def test_backtest_1min_timeframe(default_conf, fee, mocker, testdatadir) -> None:
-    default_conf['ask_strategy']['use_sell_signal'] = False
+    default_conf['use_sell_signal'] = False
     mocker.patch('freqtrade.exchange.Exchange.get_fee', fee)
     mocker.patch("freqtrade.exchange.Exchange.get_min_pair_stake_amount", return_value=0.00001)
     patch_exchange(mocker)
@@ -820,7 +819,7 @@ def test_backtest_start_timerange(default_conf, mocker, caplog, testdatadir):
 @pytest.mark.filterwarnings("ignore:deprecated")
 def test_backtest_start_multi_strat(default_conf, mocker, caplog, testdatadir):
 
-    default_conf['ask_strategy'].update({
+    default_conf.update({
         "use_sell_signal": True,
         "sell_profit_only": False,
         "sell_profit_offset": 0.0,
@@ -895,7 +894,7 @@ def test_backtest_start_multi_strat(default_conf, mocker, caplog, testdatadir):
 
 @pytest.mark.filterwarnings("ignore:deprecated")
 def test_backtest_start_multi_strat_nomock(default_conf, mocker, caplog, testdatadir, capsys):
-    default_conf['ask_strategy'].update({
+    default_conf.update({
         "use_sell_signal": True,
         "sell_profit_only": False,
         "sell_profit_offset": 0.0,

@@ -60,7 +60,7 @@ OS Specific steps are listed first, the [Common](#common) section below is neces
     sudo apt-get update
 
     # install packages
-    sudo apt install -y python3-pip python3-venv python3-pandas git
+    sudo apt install -y python3-pip python3-venv python3-dev python3-pandas git
     ```
 
 === "RaspberryPi/Raspbian"
@@ -203,6 +203,8 @@ sed -i.bak "s|0.00000001|0.000000000000000001 |g" src/ta_func/ta_utility.h
 ./configure --prefix=/usr/local
 make
 sudo make install
+# On debian based systems (debian, ubuntu, ...) - updating ldconfig might be necessary.
+sudo ldconfig  
 cd ..
 rm -rf ./ta-lib*
 ```
