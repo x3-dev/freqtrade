@@ -16,7 +16,7 @@ from freqtrade.rpc.api_server.api_schemas import (AvailablePairs, Balances, Blac
                                                   ForceBuyResponse, ForceSellPayload, Locks, Logs,
                                                   OpenTradeSchema, PairHistory, PerformanceEntry,
                                                   Ping, PlotConfig, Profit, ResultMsg, ShowConfig,
-                                                  Stats, StatusMsg, StrategyListResponse,
+                                                  Stats, StatusMsg, StrategyListResponse, ChangeConfigPayload,
                                                   StrategyResponse, Version, WhitelistResponse)
 from freqtrade.rpc.api_server.deps import get_config, get_rpc, get_rpc_optional
 from freqtrade.rpc.rpc import RPCException
@@ -26,6 +26,11 @@ from freqtrade.rpc.rpc import RPCException
 router_public = APIRouter()
 # Private API, protected by authentication
 router = APIRouter()
+
+
+@router.post('/change_config', response_model=StatusMsg, tags=['botcontrol'])
+def change_config(payload: ChangeConfigPayload, rpc: RPC = Depends(get_rpc)):
+    return rpc._rpc_change_config(payload.key, payload.val)
 
 
 @router_public.get('/ping', response_model=Ping)

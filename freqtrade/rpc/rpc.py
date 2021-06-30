@@ -94,6 +94,14 @@ class RPC:
         if self._config.get('fiat_display_currency', None):
             self._fiat_converter = CryptoToFiatConverter()
 
+    def _rpc_change_config(self, key: str, val: str) -> Dict[str, str]:
+        """
+        Handler to stop buying, but handle open trades gracefully.
+        """
+        if self._freqtrade.state == State.RUNNING:
+            self._freqtrade.config[key] = val
+        return {'status': f'Changed {key} with {val} for bot configuration.'}
+
     @staticmethod
     def _rpc_show_config(config, botstate: Union[State, str]) -> Dict[str, Any]:
         """
