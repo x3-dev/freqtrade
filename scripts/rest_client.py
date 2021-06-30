@@ -83,6 +83,14 @@ class FtRestClient():
         """
         return self._post("stop")
 
+    def change_config(self, key, val):
+        """Force-sell a trade.
+
+        :param tradeid: Id of the trade (can be received via status command)
+        :return: json object
+        """
+        return self._post("change_config", data={"key": key, "val": val})
+
     def stopbuy(self):
         """Stop buying (but handle sells gracefully). Use `reload_config` to reset.
 
