@@ -96,8 +96,9 @@ class RPC:
 
     def _rpc_change_config(self, key: str, val: str) -> Dict[str, str]:
         """
-        Handler to stop buying, but handle open trades gracefully.
+        Handler to change configuration variables at runtime
         """
+        # nested-lookup todo
         if self._freqtrade.state == State.RUNNING:
             self._freqtrade.config[key] = val
         return {'status': f'Changed {key} with {val} for bot configuration.'}
