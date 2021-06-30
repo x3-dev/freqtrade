@@ -96,9 +96,14 @@ class RPC:
 
     def _rpc_change_config(self, key: str, val: str) -> Dict[str, str]:
         """
+<<<<<<< HEAD
         Handler to change configuration variables at runtime
         """
         # nested-lookup todo
+=======
+        Handler to stop buying, but handle open trades gracefully.
+        """
+>>>>>>> e5e37f7abbce1e27e91dd58c546d105b7f983595
         if self._freqtrade.state == State.RUNNING:
             self._freqtrade.config[key] = val
         return {'status': f'Changed {key} with {val} for bot configuration.'}
@@ -390,7 +395,7 @@ class RPC:
             )
             profit_all_ratio.append(profit_ratio)
 
-        best_pair = Trade.get_best_pair()
+        best_pair = Trade.get_best_pair(start_date)
 
         # Prepare data to display
         profit_closed_coin_sum = round(sum(profit_closed_coin), 8)
