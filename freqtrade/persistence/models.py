@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 _DECL_BASE: Any = declarative_base()
 
 
-def init_db(db_url: str, schema: str, clean_open_orders: bool = False) -> None:
+def init_db(config: Dict = config) -> None:
     """
     Initializes this module with the given config,
     registers all known command handlers
@@ -40,6 +40,9 @@ def init_db(db_url: str, schema: str, clean_open_orders: bool = False) -> None:
         Useful for dry-run or if all orders have been reset on the exchange.
     :return: None
     """
+    db_url: str = self.config.get('db_url', None)
+    schema: str = self.config.get('schema', None)
+    clean_open_orders: bool=self.config['dry_run']
 
     kwargs = {}
     __schema__ = re.sub('[\W_]+', '_', schema).lower()
