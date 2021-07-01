@@ -64,7 +64,7 @@ class FreqtradeBot(LoggingMixin):
 
         self.exchange = ExchangeResolver.load_exchange(self.config['exchange']['name'], self.config)
 
-        init_db(self.config.get('db_url', None), self.config.get('bot_name', None), clean_open_orders=self.config['dry_run'])
+        init_db(config=self.config)
 
         self.wallets = Wallets(self.config, self.exchange)
 
