@@ -101,10 +101,10 @@ class RPC:
         Handler to change configuration variables at runtime
         """
         if self._freqtrade.state == State.RUNNING:
-            # self._freqtrade.config[key] = val
             if key in nested_lookup.get_all_keys(self._freqtrade.config):
                 try:
-                    self._freqtrade.config = nested_lookup.nested_update(self._freqtrade.config, key=key, value=val)
+                    result = nested_lookup.nested_update(self._freqtrade.config, key=key, value=val)
+                    self._freqtrade.config.update(result)
                 except Exception as err:
                     return {'status': f'Error updating {key} with {val} for bot configuration. Traceback: {err}'}
                 finally:
