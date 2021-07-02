@@ -11,6 +11,7 @@ import arrow
 from numpy import NAN, inf, int64, mean
 from pandas import DataFrame
 
+import ast
 import nested_lookup
 
 from freqtrade.configuration.timerange import TimeRange
@@ -96,21 +97,32 @@ class RPC:
         if self._config.get('fiat_display_currency', None):
             self._fiat_converter = CryptoToFiatConverter()
 
-    def _rpc_change_config(self, key: str, val: str) -> Dict[str, str]:
+    def _rpc_change_config(self, key: Optional(str), val: Optional[str, Any]) -> Dict[str, Any]:
         """
         Handler to change configuration variables at runtime
         """
         if self._freqtrade.state == State.RUNNING:
             if key in nested_lookup.get_all_keys(self._freqtrade.config):
                 try:
-                    result = nested_lookup.nested_update(self._freqtrade.config, key=key, value=val)
-                    self._freqtrade.config.update(result)
+                    value = ast.literal_eval(val)
+                except Exception as err:
+                    # Cache error and pass value as string
+                    logger.info('Passed origin value to configuration', err)
+                    value = val
+                try:
+                    self._freqtrade.config.update(
+                        nested_lookup.nested_update(
+                            self._freqtrade.config,
+                            key=key,
+                            value=value
+                        )
+                    )
                 except Exception as err:
                     return {'status': f'Error updating {key} with {val} for bot configuration. Traceback: {err}'}
                 finally:
                     return {'status': f'Changed {key} with {val} for bot configuration.'}
             return {'status': f'Not able to change {key} with {val} for bot configuration. Maybe wrong key?'}
-        return {'status': 'Instance not running'}
+        return {'status': 'Instance is not running'}
 
     @staticmethod
     def _rpc_show_config(config, botstate: Union[State, str]) -> Dict[str, Any]:
