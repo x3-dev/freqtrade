@@ -1,17 +1,22 @@
 """
-This module contains the class to persist trades into SQLite
+This module contains the class to persist trades into the database
 """
+
+import re
 import logging
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import (Boolean, Column, DateTime, Float, ForeignKey, Integer, String,
-                        create_engine, desc, func, inspect)
-from sqlalchemy.exc import NoSuchModuleError
+                        create_engine, desc, func, inspect, event, text, DDL)
+from sqlalchemy.exc import NoSuchModuleError, ProgrammingError
 from sqlalchemy.orm import Query, declarative_base, relationship, scoped_session, sessionmaker
 from sqlalchemy.pool import StaticPool
+from sqlalchemy.sql import exists, select
+from sqlalchemy.schema import CreateSchema
 from sqlalchemy.sql.schema import UniqueConstraint
+from sqlalchemy_utils import database_exists, create_database
 
 from freqtrade.constants import DATETIME_PRINT_FORMAT
 from freqtrade.enums import SellType
@@ -19,41 +24,87 @@ from freqtrade.exceptions import DependencyException, OperationalException
 from freqtrade.misc import safe_value_fallback
 from freqtrade.persistence.migrations import check_migrate
 
-
 logger = logging.getLogger(__name__)
 
-
 _DECL_BASE: Any = declarative_base()
-_SQL_DOCS_URL = 'http://docs.sqlalchemy.org/en/latest/core/engines.html#database-urls'
 
 
-def init_db(db_url: str, clean_open_orders: bool = False) -> None:
+def init_db(config: Dict = config) -> None:
     """
     Initializes this module with the given config,
     registers all known command handlers
     and starts polling for message updates
     :param db_url: Database to use
+    :param schema: Database schema to use
     :param clean_open_orders: Remove open orders from the database.
         Useful for dry-run or if all orders have been reset on the exchange.
     :return: None
     """
-    kwargs = {}
 
-    if db_url == 'sqlite://':
-        kwargs.update({
-            'poolclass': StaticPool,
-        })
+    db_url: str = self.config.get('db_url', None)
+    schema: str = self.config.get('schema', None)
+    clean_open_orders: bool = self.config.get('dry_run', False)
+
+    kwargs = {}
+    __schema__ = re.sub('[\W_]+', '_', schema).lower()
+
     # Take care of thread ownership
     if db_url.startswith('sqlite://'):
         kwargs.update({
             'connect_args': {'check_same_thread': False},
         })
+        if db_url == 'sqlite://':
+            kwargs.update({
+                'poolclass': StaticPool,
+            })
+
+    if db_url.startswith('postgresql'):
+        _DECL_BASE.metadata.schema = __schema__
+        kwargs.update({
+            'connect_args': {'options': f'-csearch_path={__schema__}'},
+        })
 
     try:
         engine = create_engine(db_url, future=True, **kwargs)
     except NoSuchModuleError:
-        raise OperationalException(f"Given value for db_url: '{db_url}' "
-                                   f"is no valid database URL! (See {_SQL_DOCS_URL})")
+        raise OperationalException(f"Given value for db_url: '{db_url}' is no valid database URL!"
+            f" (See http://docs.sqlalchemy.org/en/latest/core/engines.html#database-urls)"
+        )
+
+    """
+        Hack to manage multiple bots in a single database using the advantage of PostgreSql schemata
+        Docs: https://www.postgresql.org/docs/13/ddl-schemas.html
+        Install: psycopg2 sqlalchemy-utils
+        Caveats:
+            - if running bot through unix socket by setting db_url='postgresql+psycopg2:///dbname' the user running bot script eg. freqtrade must exist as ROLE in PostgreSql
+            - if database is not exists and should be created by bot PostgreSql ROLE must have create privileges
+        Summary:
+            - each bot is using its own namespace/schema with its tables
+            - schema is created on db_init method while bot is starting
+            - schema name is adopted through configuration variable 'bot_name'
+    """
+
+    if not database_exists(engine.url):
+        logger.info(f"database '{engine.url.database}' does not exists, creating")
+        try:
+            create_database(engine.url)
+        except Exception as err:
+            raise OperationalException(f"Error occured while creating database: {err}")
+
+    if db_url.startswith('postgresql'):
+        if not __schema__ or __schema__ is None:
+            raise OperationalException(
+                f"Error occured: 'schema name is not provided, probably configuration file has no ´bot_name´ entry!'"
+            )
+        if __schema__.startswith('pg_'):
+            raise OperationalException(f"Error occured: schema name should not start with 'pg_'")
+
+        if not __schema__ in inspect(engine).get_schema_names():
+            logger.info(f"schema '{__schema__}' does not exists, creating")
+            try:
+                event.listen(_DECL_BASE.metadata, 'before_create', CreateSchema(__schema__))
+            except ProgrammingError as err:
+                raise OperationalException(f"Error occured: '{err}'")
 
     # https://docs.sqlalchemy.org/en/13/orm/contextual.html#thread-local-scope
     # Scoped sessions proxy requests to the appropriate thread-local session.
@@ -65,7 +116,10 @@ def init_db(db_url: str, clean_open_orders: bool = False) -> None:
 
     previous_tables = inspect(engine).get_table_names()
     _DECL_BASE.metadata.create_all(engine)
+    # TimescaleDb need CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
+    event.listen(Order.__table__, 'after_create', DDL(f"SELECT create_hypertable('{Order.__tablename__}', 'order_date');"))
     check_migrate(engine, decl_base=_DECL_BASE, previous_tables=previous_tables)
+
 
     # Clean dry_run DB if the db is not in-memory
     if clean_open_orders and db_url != 'sqlite://':
@@ -841,7 +895,7 @@ class Trade(_DECL_BASE, LocalTrade):
         ]
 
     @staticmethod
-    def get_best_pair():
+    def get_best_pair(start_date: datetime = datetime.fromtimestamp(0)):
         """
         Get best pair with closed trade.
         NOTE: Not supported in Backtesting.
@@ -849,7 +903,7 @@ class Trade(_DECL_BASE, LocalTrade):
         """
         best_pair = Trade.query.with_entities(
             Trade.pair, func.sum(Trade.close_profit).label('profit_sum')
-        ).filter(Trade.is_open.is_(False)) \
+        ).filter(Trade.is_open.is_(False) & (Trade.close_date >= start_date)) \
             .group_by(Trade.pair) \
             .order_by(desc('profit_sum')).first()
         return best_pair
