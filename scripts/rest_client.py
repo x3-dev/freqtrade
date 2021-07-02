@@ -69,6 +69,13 @@ class FtRestClient():
     def _post(self, apipath, params: dict = None, data: dict = None):
         return self._call("POST", apipath, params=params, data=data)
 
+    def change_config(self, key, val):
+        """Force-sell a trade.
+        :param tradeid: Id of the trade (can be received via status command)
+        :return: json object
+        """
+        return self._post("change_config", data={"key": key, "val": val})
+
     def start(self):
         """Start the bot if it's in the stopped state.
 

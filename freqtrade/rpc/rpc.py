@@ -11,6 +11,8 @@ import arrow
 from numpy import NAN, inf, int64, mean
 from pandas import DataFrame
 
+import nested_lookup
+
 from freqtrade.configuration.timerange import TimeRange
 from freqtrade.constants import CANCEL_REASON, DATETIME_PRINT_FORMAT
 from freqtrade.data.history import load_data
@@ -93,6 +95,22 @@ class RPC:
         self._config: Dict[str, Any] = freqtrade.config
         if self._config.get('fiat_display_currency', None):
             self._fiat_converter = CryptoToFiatConverter()
+
+    def _rpc_change_config(self, key: str, val: str) -> Dict[str, str]:
+        """
+        Handler to change configuration variables at runtime
+        """
+        if self._freqtrade.state == State.RUNNING:
+            # self._freqtrade.config[key] = val
+            if key in nested_lookup.get_all_keys(self._freqtrade.config):
+                try:
+                    self._freqtrade.config = nested_lookup.nested_update(self._freqtrade.config, key=key, value=val)
+                except Exception as err:
+                    return {'status': f'Error updating {key} with {val} for bot configuration. Traceback: {err}'}
+                finally:
+                    return {'status': f'Changed {key} with {val} for bot configuration.'}
+            return {'status': f'Not able to change {key} with {val} for bot configuration. Maybe wrong key?'}
+        return {'status': 'Instance not running'}
 
     @staticmethod
     def _rpc_show_config(config, botstate: Union[State, str]) -> Dict[str, Any]:

@@ -6,6 +6,11 @@ from pydantic import BaseModel
 from freqtrade.constants import DATETIME_PRINT_FORMAT
 
 
+class ChangeConfigPayload(BaseModel):
+    key: str
+    val: Optional[str]
+
+
 class Ping(BaseModel):
     status: str
 
