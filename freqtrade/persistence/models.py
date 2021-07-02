@@ -1,5 +1,5 @@
 """
-This module contains the class to persist trades into the database
+    This module contains the class to persist trades into the database
 """
 
 import re
@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 _DECL_BASE: Any = declarative_base()
 
 
-def init_db(config: Dict = config) -> None:
+def init_db(config: Dict) -> None:
     """
     Initializes this module with the given config,
     registers all known command handlers
@@ -41,12 +41,11 @@ def init_db(config: Dict = config) -> None:
     :return: None
     """
 
-    db_url: str = self.config.get('db_url', None)
-    schema: str = self.config.get('schema', None)
-    clean_open_orders: bool = self.config.get('dry_run', False)
+    schema: str = config.get('schema', None)
+    db_url: str = config.get('db_url', None)
+    clean_open_orders: bool = config.get('dry_run', False)
 
-    kwargs = {}
-    __schema__ = re.sub('[\W_]+', '_', schema).lower()
+    kwargs, __schema__ = {}, None
 
     # Take care of thread ownership
     if db_url.startswith('sqlite://'):
@@ -57,19 +56,6 @@ def init_db(config: Dict = config) -> None:
             kwargs.update({
                 'poolclass': StaticPool,
             })
-
-    if db_url.startswith('postgresql'):
-        _DECL_BASE.metadata.schema = __schema__
-        kwargs.update({
-            'connect_args': {'options': f'-csearch_path={__schema__}'},
-        })
-
-    try:
-        engine = create_engine(db_url, future=True, **kwargs)
-    except NoSuchModuleError:
-        raise OperationalException(f"Given value for db_url: '{db_url}' is no valid database URL!"
-            f" (See http://docs.sqlalchemy.org/en/latest/core/engines.html#database-urls)"
-        )
 
     """
         Hack to manage multiple bots in a single database using the advantage of PostgreSql schemata
@@ -83,6 +69,19 @@ def init_db(config: Dict = config) -> None:
             - schema is created on db_init method while bot is starting
             - schema name is adopted through configuration variable 'bot_name'
     """
+    if db_url.startswith('postgresql'):
+        __schema__ = re.sub('[\W\-]+', '_', schema or 'public').lower()
+        _DECL_BASE.metadata.schema = __schema__
+        kwargs.update({
+            'connect_args': {'options': f'-csearch_path={__schema__}'},
+        })
+
+    try:
+        engine = create_engine(db_url, future=True, **kwargs)
+    except NoSuchModuleError:
+        raise OperationalException(f"Given value for db_url: '{db_url}' is no valid database URL!"
+            f" (See http://docs.sqlalchemy.org/en/latest/core/engines.html#database-urls)"
+        )
 
     if not database_exists(engine.url):
         logger.info(f"database '{engine.url.database}' does not exists, creating")
