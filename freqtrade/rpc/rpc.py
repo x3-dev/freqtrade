@@ -97,17 +97,19 @@ class RPC:
         if self._config.get('fiat_display_currency', None):
             self._fiat_converter = CryptoToFiatConverter()
 
-    def _rpc_change_config(self, key: Optional(str), val: Optional[str, Any]) -> Dict[str, Any]:
+    def _rpc_change_config(self, key: str, val: Any) -> Dict[str, Any]:
         """
         Handler to change configuration variables at runtime
         """
         if self._freqtrade.state == State.RUNNING:
             if key in nested_lookup.get_all_keys(self._freqtrade.config):
+                msg = f'Changed {key} with {val} for bot configuration.'
                 try:
                     value = ast.literal_eval(val)
                 except Exception as err:
                     # Cache error and pass value as string
                     logger.info('Passed origin value to configuration', err)
+                    msg += 'Passed origin value to configuration'
                     value = val
                 try:
                     self._freqtrade.config.update(
@@ -120,7 +122,7 @@ class RPC:
                 except Exception as err:
                     return {'status': f'Error updating {key} with {val} for bot configuration. Traceback: {err}'}
                 finally:
-                    return {'status': f'Changed {key} with {val} for bot configuration.'}
+                    return {'status': msg}
             return {'status': f'Not able to change {key} with {val} for bot configuration. Maybe wrong key?'}
         return {'status': 'Instance is not running'}
 
