@@ -41,7 +41,7 @@ def init_db(config: Dict) -> None:
     :return: None
     """
 
-    schema: str = config.get('schema', None)
+    schema: str = config.get('db_schema', None)
     db_url: str = config.get('db_url', None)
     clean_open_orders: bool = config.get('dry_run', False)
 
