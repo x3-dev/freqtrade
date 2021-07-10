@@ -70,8 +70,8 @@ class FtRestClient():
         return self._call("POST", apipath, params=params, data=data)
 
     def change_config(self, key, val):
-        """Force-sell a trade.
-        :param tradeid: Id of the trade (can be received via status command)
+        """Change config at runtume.
+        :param key/val: any key from config file followed by its value
         :return: json object
         """
         return self._post("change_config", data={"key": key, "val": val})
