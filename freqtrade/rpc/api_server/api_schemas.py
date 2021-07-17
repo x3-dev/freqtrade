@@ -11,6 +11,11 @@ class ChangeConfigPayload(BaseModel):
     val: Optional[str]
 
 
+class ChangeConfigStatus(BaseModel):
+    status: str
+    msg: str
+
+
 class Ping(BaseModel):
     status: str
 

@@ -120,11 +120,11 @@ class RPC:
                         )
                     )
                 except Exception as err:
-                    return {'status': f'Error updating {key} with {val} for bot configuration. Traceback: {err}'}
+                    return {'status': 'error', 'msg': f'Error updating {key} with {val} for bot configuration. Traceback: {err}'}
                 finally:
-                    return {'status': msg}
-            return {'status': f'Not able to change {key} with {val} for bot configuration. Maybe wrong key?'}
-        return {'status': 'Instance is not running'}
+                    return {'status': 'ok', 'msg': msg}
+            return {'status': 'error', 'msg': f'Not able to change {key} with {val} for bot configuration. Maybe wrong key?'}
+        return {'status': 'error', 'msg': 'Instance is not running'}
 
     @staticmethod
     def _rpc_show_config(config, botstate: Union[State, str]) -> Dict[str, Any]:

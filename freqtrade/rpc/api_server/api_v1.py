@@ -11,8 +11,8 @@ from freqtrade.data.history import get_datahandler
 from freqtrade.exceptions import OperationalException
 from freqtrade.rpc import RPC
 from freqtrade.rpc.api_server.api_schemas import (AvailablePairs, Balances, BlacklistPayload,
-                                                  BlacklistResponse, ChangeConfigPayload, Count, Daily,
-                                                  DeleteLockRequest, DeleteTrade, ForceBuyPayload,
+                                                  BlacklistResponse, ChangeConfigPayload, ChangeConfigStatus,
+                                                  Count, Daily, DeleteLockRequest, DeleteTrade, ForceBuyPayload,
                                                   ForceBuyResponse, ForceSellPayload, Locks, Logs,
                                                   OpenTradeSchema, PairHistory, PerformanceEntry,
                                                   Ping, PlotConfig, Profit, ResultMsg, ShowConfig,
@@ -28,7 +28,7 @@ router_public = APIRouter()
 router = APIRouter()
 
 
-@router.post('/change_config', response_model=StatusMsg, tags=['botcontrol'])
+@router.post('/change_config', response_model=ChangeConfigStatus, tags=['botcontrol'])
 def change_config(payload: ChangeConfigPayload, rpc: RPC = Depends(get_rpc)):
     return rpc._rpc_change_config(payload.key, payload.val)
 
