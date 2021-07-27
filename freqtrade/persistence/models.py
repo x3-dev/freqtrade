@@ -70,7 +70,7 @@ def init_db(config: Dict) -> None:
             - schema name is adopted through configuration variable 'bot_name'
     """
     if db_url.startswith('postgresql'):
-        __schema__ = re.sub('[\W\-]+', '_', schema or 'public').lower()
+        __schema__ = re.sub('[\W]+', '_', schema or 'public').lower()
         _DECL_BASE.metadata.schema = __schema__
         kwargs.update({
             'connect_args': {'options': f'-csearch_path={__schema__}'},
