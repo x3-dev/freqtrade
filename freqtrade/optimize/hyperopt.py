@@ -102,16 +102,17 @@ class Hyperopt:
         self.num_epochs_saved = 0
         self.current_best_epoch: Optional[Dict[str, Any]] = None
 
-        # Populate functions here (hasattr is slow so should not be run during "regular" operations)
-        if hasattr(self.custom_hyperopt, 'populate_indicators'):
-            self.backtesting.strategy.advise_indicators = (  # type: ignore
-                self.custom_hyperopt.populate_indicators)  # type: ignore
-        if hasattr(self.custom_hyperopt, 'populate_buy_trend'):
-            self.backtesting.strategy.advise_buy = (  # type: ignore
-                self.custom_hyperopt.populate_buy_trend)  # type: ignore
-        if hasattr(self.custom_hyperopt, 'populate_sell_trend'):
-            self.backtesting.strategy.advise_sell = (  # type: ignore
-                self.custom_hyperopt.populate_sell_trend)  # type: ignore
+        if not self.auto_hyperopt:
+            # Populate "fallback" functions here (hasattr is slow so should not be run during "regular" operations)
+            if hasattr(self.custom_hyperopt, 'populate_indicators'):
+                self.backtesting.strategy.advise_indicators = (  # type: ignore
+                    self.custom_hyperopt.populate_indicators)  # type: ignore
+            if hasattr(self.custom_hyperopt, 'populate_buy_trend'):
+                self.backtesting.strategy.advise_buy = (  # type: ignore
+                    self.custom_hyperopt.populate_buy_trend)  # type: ignore
+            if hasattr(self.custom_hyperopt, 'populate_sell_trend'):
+                self.backtesting.strategy.advise_sell = (  # type: ignore
+                    self.custom_hyperopt.populate_sell_trend)  # type: ignore
 
         # Use max_open_trades for hyperopt as well, except --disable-max-market-positions is set
         if self.config.get('use_max_market_positions', True):
@@ -264,17 +265,14 @@ class Hyperopt:
 
     def generate_optimizer(self, raw_params: List[Any], iteration=None) -> Dict:
         """
-        Used Optimize function. Called once per epoch to optimize whatever is configured.
+        Used Optimize function.
+        Called once per epoch to optimize whatever is configured.
         Keep this function as optimized as possible!
         """
         backtest_start_time = datetime.now(timezone.utc)
         params_dict = self._get_params_dict(self.dimensions, raw_params)
 
         # Apply parameters
-        if HyperoptTools.has_space(self.config, 'roi'):
-            self.backtesting.strategy.minimal_roi = (  # type: ignore
-                self.custom_hyperopt.generate_roi_table(params_dict))
-
         if HyperoptTools.has_space(self.config, 'buy'):
             self.backtesting.strategy.advise_buy = (  # type: ignore
                 self.custom_hyperopt.buy_strategy_generator(params_dict))
@@ -282,6 +280,10 @@ class Hyperopt:
         if HyperoptTools.has_space(self.config, 'sell'):
             self.backtesting.strategy.advise_sell = (  # type: ignore
                 self.custom_hyperopt.sell_strategy_generator(params_dict))
+
+        if HyperoptTools.has_space(self.config, 'roi'):
+            self.backtesting.strategy.minimal_roi = (  # type: ignore
+                self.custom_hyperopt.generate_roi_table(params_dict))
 
         if HyperoptTools.has_space(self.config, 'stoploss'):
             self.backtesting.strategy.stoploss = params_dict['stoploss']
