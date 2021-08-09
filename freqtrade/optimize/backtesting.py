@@ -130,6 +130,9 @@ class Backtesting:
         self.abort = False
 
     def __del__(self):
+        self.cleanup()
+
+    def cleanup(self):
         LoggingMixin.show_output = True
         PairLocks.use_db = True
         Trade.use_db = True
@@ -146,6 +149,8 @@ class Backtesting:
         # since a "perfect" stoploss-sell is assumed anyway
         # And the regular "stoploss" function would not apply to that case
         self.strategy.order_types['stoploss_on_exchange'] = False
+
+    def _load_protections(self, strategy: IStrategy):
         if self.config.get('enable_protections', False):
             conf = self.config
             if hasattr(strategy, 'protections'):
@@ -194,6 +199,7 @@ class Backtesting:
         Trade.reset_trades()
         self.rejected_trades = 0
         self.dataprovider.clear_cache()
+        self._load_protections(self.strategy)
 
     def check_abort(self):
         """
