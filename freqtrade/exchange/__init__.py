@@ -3,7 +3,7 @@
 from freqtrade.exchange.common import MAP_EXCHANGE_CHILDCLASS
 from freqtrade.exchange.exchange import Exchange
 # isort: on
-from freqtrade.exchange.ascendex import Ascendex
+# from freqtrade.exchange.ascendex import Ascendex
 from freqtrade.exchange.bibox import Bibox
 from freqtrade.exchange.binance import Binance
 from freqtrade.exchange.bittrex import Bittrex
