@@ -33,11 +33,8 @@ class Ascendex(Exchange):
         try:
             order = self._api.fetch_order(order_id, pair)
             timestamp = order.get('lastTradeTimestamp')
-            timestamp = self.safe_integer_2(order, 'lastTradeTimestamp', 'timestamp')
             order['timestamp'] = timestamp
-            # timestamp /= 1000
-            order['datetime'] = self.iso8601(timestamp)
-            # datetime.utcfromtimestamp(timestamp)
+            order['datetime'] = datetime.utcfromtimestamp(timestamp/1000)
             self._log_exchange_response('fetch_order', order)
             return order
         except ccxt.OrderNotFound as e:
