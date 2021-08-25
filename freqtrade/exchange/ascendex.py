@@ -1,8 +1,11 @@
 """ Ascendex exchange subclass """
+
+import ccxt
 import logging
 from typing import Dict
-
+from datetime import datetime
 from freqtrade.exchange import Exchange
+from freqtrade.exchange.common import API_FETCH_ORDER_RETRY_COUNT, retrier
 
 
 logger = logging.getLogger(__name__)
@@ -22,6 +25,71 @@ class Ascendex(Exchange):
         # 'fetch_my_trades': True
     # }
     _ccxt_config: Dict = {"has": {"fetchMyTrades": "emulated"}}
+
+    @retrier(retries=API_FETCH_ORDER_RETRY_COUNT)
+    def fetch_order(self, order_id: str, pair: str) -> Dict:
+        if self._config['dry_run']:
+            return self.fetch_dry_run_order(order_id)
+        try:
+            order = self._api.fetch_order(order_id, pair)
+            timestamp = order.get('lastTradeTimestamp')
+            timestamp = self.safe_integer_2(order, 'lastTradeTimestamp', 'timestamp')
+            order['timestamp'] = timestamp
+            # timestamp /= 1000
+            order['datetime'] = self.iso8601(timestamp)
+            # datetime.utcfromtimestamp(timestamp)
+            self._log_exchange_response('fetch_order', order)
+            return order
+        except ccxt.OrderNotFound as e:
+            raise RetryableOrderError(
+                f'Order not found (pair: {pair} id: {order_id}). Message: {e}') from e
+        except ccxt.InvalidOrder as e:
+            raise InvalidOrderException(
+                f'Tried to get an invalid order (pair: {pair} id: {order_id}). Message: {e}') from e
+        except ccxt.DDoSProtection as e:
+            raise DDosProtection(e) from e
+        except (ccxt.NetworkError, ccxt.ExchangeError) as e:
+            raise TemporaryError(
+                f'Could not get order due to {e.__class__.__name__}. Message: {e}') from e
+        except ccxt.BaseError as e:
+            raise OperationalException(e) from e
+
+    # Assign method to fetch_stoploss_order to allow easy overriding in other classes
+    fetch_stoploss_order = fetch_order
+
+    def order_to_trade(self, order):
+        # self entire method should be moved to the base class
+        timestamp = self.safe_integer_2(order, 'lastTradeTimestamp', 'timestamp')
+        return {
+            'id': self.safe_string(order, 'id'),
+            'side': self.safe_string(order, 'side'),
+            'order': self.safe_string(order, 'id'),
+            'type': self.safe_string(order, 'type'),
+            'price': self.safe_number(order, 'average'),
+            'amount': self.safe_number(order, 'filled'),
+            'cost': self.safe_number(order, 'cost'),
+            'symbol': self.safe_string(order, 'symbol'),
+            'timestamp': timestamp,
+            'datetime': self.iso8601(timestamp),
+            'fee': self.safe_value(order, 'fee'),
+            'info': order,
+            'takerOrMaker': None,
+        }
+
+
+    def orders_to_trades(self, orders):
+        # self entire method should be moved to the base class
+        result = []
+        for i in range(0, len(orders)):
+            result.append(self.order_to_trade(orders[i]))
+        return result
+
+
+    def parse_orders(self, orders, market=None, since=None, limit=None, params={}):
+        if self.options['fetchClosedOrdersFilterBySince']:
+            return super(ascendex, self).parse_orders(orders, market, since, limit, params)
+        else:
+            return super(ascendex, self).parse_orders(orders, market, None, limit, params)
 
 
     def fetch_my_trades(self, symbol=None, since=None, limit=None, params={}):

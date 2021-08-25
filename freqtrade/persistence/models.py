@@ -41,8 +41,8 @@ def init_db(config: Dict) -> None:
     :return: None
     """
 
-    schema: str = config.get('db_schema', None)
     db_url: str = config.get('db_url', None)
+    schema: str = config.get('db_schema', None)
     clean_open_orders: bool = config.get('dry_run', False)
 
     kwargs, __schema__ = {}, None
@@ -91,15 +91,15 @@ def init_db(config: Dict) -> None:
             raise OperationalException(f"Error occured while creating database: {err}")
 
     if db_url.startswith('postgresql'):
-        if not __schema__ or __schema__ is None:
-            raise OperationalException(
-                f"Error occured: 'schema name is not provided, probably configuration file has no ´bot_name´ entry!'"
-            )
+        # if not __schema__ or __schema__ is None:
+            # raise OperationalException(
+                # f"Error occured: 'schema name is not provided, probably configuration file has no ´bot_name´ entry!'"
+            # )
         if __schema__.startswith('pg_'):
             raise OperationalException(f"Error occured: schema name should not start with 'pg_'")
 
         if not __schema__ in inspect(engine).get_schema_names():
-            logger.info(f"schema '{__schema__}' does not exists, creating")
+            logger.info(f"Schema '{__schema__}' does not exists, creating")
             try:
                 event.listen(_DECL_BASE.metadata, 'before_create', CreateSchema(__schema__))
             except ProgrammingError as err:
