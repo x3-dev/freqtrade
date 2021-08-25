@@ -137,8 +137,9 @@ class RPC:
             'dry_run': config['dry_run'],
             'stake_currency': config['stake_currency'],
             'stake_currency_decimals':  decimals_per_coin(config['stake_currency']),
-            'stake_amount': config['stake_amount'],
+            'stake_amount': config.get('stake_amount', 0.0),
             'available_capital': config.get('available_capital'),
+            'sell_profit_offset': config.get('sell_profit_offset', 0.0),
             'max_open_trades': (config['max_open_trades']
                                 if config['max_open_trades'] != float('inf') else -1),
             'minimal_roi': config['minimal_roi'].copy() if 'minimal_roi' in config else {},

@@ -130,6 +130,7 @@ class ShowConfig(BaseModel):
     stake_currency: str
     stake_amount: Union[float, str]
     available_capital: Optional[float]
+    sell_profit_offset: Optional[float]
     stake_currency_decimals: int
     max_open_trades: int
     minimal_roi: Dict[str, Any]
