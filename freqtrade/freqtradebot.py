@@ -433,11 +433,11 @@ class FreqtradeBot(LoggingMixin):
             if ((bid_check_dom.get('enabled', False)) and
                     (bid_check_dom.get('bids_to_ask_delta', 0) > 0)):
                 if self._check_depth_of_market_buy(pair, bid_check_dom):
-                    return self.execute_buy(pair, stake_amount, buy_tag=buy_tag)
+                    return self.execute_entry(pair, stake_amount, buy_tag=buy_tag)
                 else:
                     return False
 
-            return self.execute_buy(pair, stake_amount, buy_tag=buy_tag)
+            return self.execute_entry(pair, stake_amount, buy_tag=buy_tag)
         else:
             return False
 
@@ -465,8 +465,8 @@ class FreqtradeBot(LoggingMixin):
             logger.info(f"Bids to asks delta for {pair} does not satisfy condition.")
             return False
 
-    def execute_buy(self, pair: str, stake_amount: float, price: Optional[float] = None,
-                    forcebuy: bool = False, buy_tag: Optional[str] = None) -> bool:
+    def execute_entry(self, pair: str, stake_amount: float, price: Optional[float] = None,
+                      forcebuy: bool = False, buy_tag: Optional[str] = None) -> bool:
         """
         Executes a limit buy for the given pair
         :param pair: pair for which we want to create a LIMIT_BUY
@@ -745,7 +745,7 @@ class FreqtradeBot(LoggingMixin):
             trade.stoploss_order_id = None
             logger.error(f'Unable to place a stoploss order on exchange. {e}')
             logger.warning('Selling the trade forcefully')
-            self.execute_sell(trade, trade.stop_loss, sell_reason=SellCheckTuple(
+            self.execute_trade_exit(trade, trade.stop_loss, sell_reason=SellCheckTuple(
                 sell_type=SellType.EMERGENCY_SELL))
 
         except ExchangeError:
@@ -863,7 +863,7 @@ class FreqtradeBot(LoggingMixin):
 
         if should_sell.sell_flag:
             logger.info(f'Executing Sell for {trade.pair}. Reason: {should_sell.sell_type}')
-            self.execute_sell(trade, sell_rate, should_sell)
+            self.execute_trade_exit(trade, sell_rate, should_sell)
             return True
         return False
 
@@ -1064,9 +1064,9 @@ class FreqtradeBot(LoggingMixin):
             raise DependencyException(
                 f"Not enough amount to sell. Trade-amount: {amount}, Wallet: {wallet_amount}")
 
-    def execute_sell(self, trade: Trade, limit: float, sell_reason: SellCheckTuple) -> bool:
+    def execute_trade_exit(self, trade: Trade, limit: float, sell_reason: SellCheckTuple) -> bool:
         """
-        Executes a limit sell for the given trade and limit
+        Executes a trade exit for the given trade and limit
         :param trade: Trade instance
         :param limit: limit rate for the sell order
         :param sell_reason: Reason the sell was triggered
