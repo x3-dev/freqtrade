@@ -480,7 +480,7 @@ class Exchange:
         if startup_candles + 5 > candle_limit:
             raise OperationalException(
                 f"This strategy requires {startup_candles} candles to start. "
-                f"{self.name} only provides {candle_limit} for {timeframe}.")
+                f"{self.name} only provides {candle_limit - 5} for {timeframe}.")
 
     def exchange_has(self, endpoint: str) -> bool:
         """
