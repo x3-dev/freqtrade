@@ -31,7 +31,8 @@ ARGS_HYPEROPT = ARGS_COMMON_OPTIMIZE + ["hyperopt", "hyperopt_path",
                                         "epochs", "spaces", "print_all",
                                         "print_colorized", "print_json", "hyperopt_jobs",
                                         "hyperopt_random_state", "hyperopt_min_trades",
-                                        "hyperopt_loss", "disableparamexport"]
+                                        "hyperopt_loss", "disableparamexport",
+                                        "hyperopt_ignore_missing_space"]
 
 ARGS_EDGE = ARGS_COMMON_OPTIMIZE + ["stoploss_range"]
 
@@ -73,7 +74,7 @@ ARGS_PLOT_DATAFRAME = ["pairs", "indicators1", "indicators2", "plot_limit",
 ARGS_PLOT_PROFIT = ["pairs", "timerange", "export", "exportfilename", "db_url",
                     "trade_source", "timeframe", "plot_auto_open"]
 
-ARGS_INSTALL_UI = ["erase_ui_only"]
+ARGS_INSTALL_UI = ["erase_ui_only", 'ui_version']
 
 ARGS_SHOW_TRADES = ["db_url", "trade_ids", "print_json"]
 
