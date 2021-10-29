@@ -2,8 +2,8 @@
 This module manages webhook communication
 """
 import logging
+import requests
 from typing import Any, Dict
-from requests import RequestException, post
 
 from freqtrade.enums import RPCMessageType
 from freqtrade.rpc import RPC, RPCHandler
@@ -25,7 +25,6 @@ class Webhook(RPCHandler):
         super().__init__(rpc, config)
 
         self._url = self._config['webhook']['url']
-
         self._format = self._config['webhook'].get('format', 'form')
 
         if self._format != 'form' and self._format != 'json':
@@ -72,21 +71,21 @@ class Webhook(RPCHandler):
                              "Exception: %s", exc)
 
     def _send_msg(self, payload: dict) -> None:
-        """do the actual call to the webhook"""
-        config = dict()
-        if self._config['webhook'].get('auth'):
-            config['auth'] = (
-                self._config['webhook'].get('auth').get('user'),
-                self._config['webhook'].get('auth').get('password')
-            )
-        if self._format == 'form':
-            config['data'] = payload
-        elif self._format == 'json':
-            config['json'] = payload
-        else:
-            raise NotImplementedError('Unknown format: {}'.format(self._format))
-
+        """ do the actual call to the webhook """
         try:
-            post(self._url, **config)
-        except RequestException as exc:
-            logger.warning("Could not call webhook url. Exception: %s", exc)
+            config = dict()
+            if self._format == 'form':
+                config['data'] = payload
+            elif self._format == 'json':
+                config['json'] = payload
+            else:
+                raise NotImplementedError(f'Unknown format: {self._format}')
+
+            if self._config['webhook'].get('auth', {}):
+                config['auth'] = (
+                    self._config['webhook'].get('auth').get('user'),
+                    self._config['webhook'].get('auth').get('password')
+                )
+            requests.post(self._url, **config)
+        except requests.RequestException as err:
+            logger.warning(f"Could not call webhook url. Exception: {err}")
