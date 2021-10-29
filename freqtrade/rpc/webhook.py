@@ -3,15 +3,12 @@ This module manages webhook communication
 """
 import logging
 from typing import Any, Dict
-
 from requests import RequestException, post
 
 from freqtrade.enums import RPCMessageType
 from freqtrade.rpc import RPC, RPCHandler
 
-
 logger = logging.getLogger(__name__)
-
 logger.debug('Included module rpc.webhook ...')
 
 
@@ -76,14 +73,20 @@ class Webhook(RPCHandler):
 
     def _send_msg(self, payload: dict) -> None:
         """do the actual call to the webhook"""
+        config = dict()
+        if self._config['webhook'].get('auth'):
+            config['auth'] = (
+                self._config['webhook'].get('auth').get('user'),
+                self._config['webhook'].get('auth').get('password')
+            )
+        if self._format == 'form':
+            config['data'] = payload
+        elif self._format == 'json':
+            config['json'] = payload
+        else:
+            raise NotImplementedError('Unknown format: {}'.format(self._format))
 
         try:
-            if self._format == 'form':
-                post(self._url, data=payload)
-            elif self._format == 'json':
-                post(self._url, json=payload)
-            else:
-                raise NotImplementedError('Unknown format: {}'.format(self._format))
-
+            post(self._url, **config)
         except RequestException as exc:
             logger.warning("Could not call webhook url. Exception: %s", exc)
