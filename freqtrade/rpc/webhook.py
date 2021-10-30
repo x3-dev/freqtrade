@@ -72,6 +72,7 @@ class Webhook(RPCHandler):
 
     def _send_msg(self, payload: dict) -> None:
         """ do the actual call to the webhook """
+        payload['exchange'] = self._config['exchange'].get('name')
         try:
             config = dict()
             if self._format == 'form':
