@@ -27,9 +27,10 @@ class Webhook(RPCHandler):
         self._url = self._config['webhook']['url']
         self._format = self._config['webhook'].get('format', 'form')
 
-        if self._format != 'form' and self._format != 'json':
-            raise NotImplementedError('Unknown webhook format `{}`, possible values are '
-                                      '`form` (default) and `json`'.format(self._format))
+        if self._format not in ('form', 'json'):
+            raise NotImplementedError(
+                f'Unknown webhook format `{self._format}`, possible values are `form` (default) and `json`'
+            )
 
     def cleanup(self) -> None:
         """
@@ -41,7 +42,6 @@ class Webhook(RPCHandler):
     def send_msg(self, msg: Dict[str, Any]) -> None:
         """ Send a message to telegram channel """
         try:
-
             if msg['type'] == RPCMessageType.BUY:
                 valuedict = self._config['webhook'].get('webhookbuy', None)
             elif msg['type'] == RPCMessageType.BUY_CANCEL:
@@ -59,20 +59,20 @@ class Webhook(RPCHandler):
                                  RPCMessageType.WARNING):
                 valuedict = self._config['webhook'].get('webhookstatus', None)
             else:
-                raise NotImplementedError('Unknown message type: {}'.format(msg['type']))
+                raise NotImplementedError(f'Unknown message type: {msg["type"]}')
             if not valuedict:
-                logger.info("Message type '%s' not configured for webhooks", msg['type'])
+                logger.info(f"Message type {msg["type"]} not configured for webhooks")
                 return
 
             payload = {key: value.format(**msg) for (key, value) in valuedict.items()}
             self._send_msg(payload)
         except KeyError as exc:
-            logger.exception("Problem calling Webhook. Please check your webhook configuration. "
-                             "Exception: %s", exc)
+            logger.exception(f"Problem calling Webhook. Please check your webhook configuration. Exception: {exc}")
 
     def _send_msg(self, payload: dict) -> None:
         """ do the actual call to the webhook """
-        payload['exchange'] = self._config['exchange'].get('name')
+        if 'exchange' not in payload.keys():
+            payload['exchange'] = self._config['exchange'].get('name')
         try:
             config = dict()
             if self._format == 'form':
