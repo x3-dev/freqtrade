@@ -73,6 +73,8 @@ class Count(BaseModel):
 class PerformanceEntry(BaseModel):
     pair: str
     profit: float
+    profit_ratio: float
+    profit_pct: float
     profit_abs: float
     count: int
 
