@@ -65,14 +65,15 @@ class Webhook(RPCHandler):
             payload = {key: value.format(**msg) for (key, value) in valuedict.items()}
             if 'type' not in payload.keys():
                 payload['type'] = msg['type']
+            if 'exchange' not in payload.keys():
+                payload['exchange'] = self._config['exchange'].get('name')
+
             self._send_msg(payload)
         except KeyError as exc:
             logger.exception(f"Problem calling Webhook. Please check your webhook configuration. Exception: {exc}")
 
     def _send_msg(self, payload: dict) -> None:
         """ do the actual call to the webhook """
-        if 'exchange' not in payload.keys():
-            payload['exchange'] = self._config['exchange'].get('name')
         try:
             config = dict()
             if self._format == 'form':
