@@ -56,6 +56,7 @@ class Webhook(RPCHandler):
                 valuedict = self._config['webhook'].get('webhooksellcancel', None)
             elif msg['type'] in (RPCMessageType.STATUS, RPCMessageType.STARTUP, RPCMessageType.WARNING):
                 valuedict = self._config['webhook'].get('webhookstatus', None)
+                valuedict['type'] = msg['type']
             else:
                 raise NotImplementedError(f'Unknown message type: {msg["type"]}')
             if not valuedict:
@@ -63,8 +64,8 @@ class Webhook(RPCHandler):
                 return
 
             payload = {key: value.format(**msg) for (key, value) in valuedict.items()}
-            if 'type' not in payload.keys():
-                payload['type'] = msg['type']
+            if 'exchange' not in payload.keys():
+                payload['exchange'] = self._config['exchange'].get('name')
 
             self._send_msg(payload)
         except KeyError as exc:
@@ -72,8 +73,6 @@ class Webhook(RPCHandler):
 
     def _send_msg(self, payload: dict) -> None:
         """ do the actual call to the webhook """
-        if 'exchange' not in payload.keys():
-            payload['exchange'] = self._config['exchange'].get('name')
         try:
             config = dict()
             if self._format == 'form':
