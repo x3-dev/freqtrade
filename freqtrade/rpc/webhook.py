@@ -65,6 +65,8 @@ class Webhook(RPCHandler):
                 return
 
             payload = {key: value.format(**msg) for (key, value) in valuedict.items()}
+            if 'type' not in payload.keys():
+                payload['msg_type'] = msg['type']
             self._send_msg(payload)
         except KeyError as exc:
             logger.exception(f"Problem calling Webhook. Please check your webhook configuration. Exception: {exc}")
