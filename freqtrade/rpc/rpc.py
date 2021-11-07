@@ -9,12 +9,14 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import arrow
 import psutil
+from dateutil.relativedelta import relativedelta
 from numpy import NAN, inf, int64, mean
 from pandas import DataFrame
 
 import ast
 import nested_lookup
 
+from freqtrade import __version__
 from freqtrade.configuration.timerange import TimeRange
 from freqtrade.constants import CANCEL_REASON, DATETIME_PRINT_FORMAT
 from freqtrade.data.history import load_data
@@ -135,6 +137,7 @@ class RPC:
         information via rpc.
         """
         val = {
+            'version': __version__,
             'dry_run': config['dry_run'],
             'stake_currency': config['stake_currency'],
             'stake_currency_decimals':  decimals_per_coin(config['stake_currency']),
@@ -149,7 +152,9 @@ class RPC:
             'trailing_stop_positive': config.get('trailing_stop_positive'),
             'trailing_stop_positive_offset': config.get('trailing_stop_positive_offset'),
             'trailing_only_offset_is_reached': config.get('trailing_only_offset_is_reached'),
+            'unfilledtimeout': config.get('unfilledtimeout'),
             'use_custom_stoploss': config.get('use_custom_stoploss'),
+            'order_types': config.get('order_types'),
             'bot_name': config.get('bot_name', 'freqtrade'),
             'timeframe': config.get('timeframe'),
             'timeframe_ms': timeframe_to_msecs(config['timeframe']
@@ -283,7 +288,7 @@ class RPC:
     def _rpc_daily_profit(
             self, timescale: int,
             stake_currency: str, fiat_display_currency: str) -> Dict[str, Any]:
-        today = datetime.utcnow().date()
+        today = datetime.now(timezone.utc).date()
         profit_days: Dict[date, Dict] = {}
 
         if not (isinstance(timescale, int) and timescale > 0):
@@ -315,6 +320,91 @@ class RPC:
                 'trade_count': value["trades"],
             }
             for key, value in profit_days.items()
+        ]
+        return {
+            'stake_currency': stake_currency,
+            'fiat_display_currency': fiat_display_currency,
+            'data': data
+        }
+
+    def _rpc_weekly_profit(
+            self, timescale: int,
+            stake_currency: str, fiat_display_currency: str) -> Dict[str, Any]:
+        today = datetime.now(timezone.utc).date()
+        first_iso_day_of_week = today - timedelta(days=today.weekday())  # Monday
+        profit_weeks: Dict[date, Dict] = {}
+
+        if not (isinstance(timescale, int) and timescale > 0):
+            raise RPCException('timescale must be an integer greater than 0')
+
+        for week in range(0, timescale):
+            profitweek = first_iso_day_of_week - timedelta(weeks=week)
+            trades = Trade.get_trades(trade_filter=[
+                Trade.is_open.is_(False),
+                Trade.close_date >= profitweek,
+                Trade.close_date < (profitweek + timedelta(weeks=1))
+            ]).order_by(Trade.close_date).all()
+            curweekprofit = sum(
+                trade.close_profit_abs for trade in trades if trade.close_profit_abs is not None)
+            profit_weeks[profitweek] = {
+                'amount': curweekprofit,
+                'trades': len(trades)
+            }
+
+        data = [
+            {
+                'date': key,
+                'abs_profit': value["amount"],
+                'fiat_value': self._fiat_converter.convert_amount(
+                    value['amount'],
+                    stake_currency,
+                    fiat_display_currency
+                ) if self._fiat_converter else 0,
+                'trade_count': value["trades"],
+            }
+            for key, value in profit_weeks.items()
+        ]
+        return {
+            'stake_currency': stake_currency,
+            'fiat_display_currency': fiat_display_currency,
+            'data': data
+        }
+
+    def _rpc_monthly_profit(
+            self, timescale: int,
+            stake_currency: str, fiat_display_currency: str) -> Dict[str, Any]:
+        first_day_of_month = datetime.now(timezone.utc).date().replace(day=1)
+        profit_months: Dict[date, Dict] = {}
+
+        if not (isinstance(timescale, int) and timescale > 0):
+            raise RPCException('timescale must be an integer greater than 0')
+
+        for month in range(0, timescale):
+            profitmonth = first_day_of_month - relativedelta(months=month)
+            trades = Trade.get_trades(trade_filter=[
+                Trade.is_open.is_(False),
+                Trade.close_date >= profitmonth,
+                Trade.close_date < (profitmonth + relativedelta(months=1))
+            ]).order_by(Trade.close_date).all()
+            curmonthprofit = sum(
+                trade.close_profit_abs for trade in trades if trade.close_profit_abs is not None)
+            profit_months[profitmonth] = {
+                'amount': curmonthprofit,
+                'trades': len(trades)
+            }
+
+        data = [
+            {
+                'date': f"{key.year}-{key.month:02d}",
+                'abs_profit': value["amount"],
+                'fiat_value': self._fiat_converter.convert_amount(
+                    value['amount'],
+                    stake_currency,
+                    fiat_display_currency
+                ) if self._fiat_converter else 0,
+                'trade_count': value["trades"],
+            }
+            for key, value in profit_months.items()
         ]
         return {
             'stake_currency': stake_currency,

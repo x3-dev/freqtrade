@@ -1675,6 +1675,15 @@ def test_update_trade_state(mocker, default_conf_usdt, limit_buy_order_usdt, cap
     freqtrade.update_trade_state(trade, '123')
 
     assert log_has_re('Found open order for.*', caplog)
+    limit_buy_order_usdt_new = deepcopy(limit_buy_order_usdt)
+    limit_buy_order_usdt_new['filled'] = 0.0
+    limit_buy_order_usdt_new['statuss'] = 'canceled'
+
+    mocker.patch('freqtrade.freqtradebot.FreqtradeBot.get_real_amount', side_effect=ValueError)
+    mocker.patch('freqtrade.exchange.Exchange.fetch_order', return_value=limit_buy_order_usdt_new)
+    res = freqtrade.update_trade_state(trade, '123')
+    # Cancelled empty
+    assert res is True
 
 
 @pytest.mark.parametrize('initial_amount,has_rounding_fee', [
@@ -2125,11 +2134,12 @@ def test_check_handle_timedout_buy_exception(default_conf_usdt, ticker_usdt,
 
 
 def test_check_handle_timedout_sell_usercustom(default_conf_usdt, ticker_usdt, limit_sell_order_old,
-                                               mocker, open_trade) -> None:
-    default_conf_usdt["unfilledtimeout"] = {"buy": 1440, "sell": 1440}
+                                               mocker, open_trade, caplog) -> None:
+    default_conf_usdt["unfilledtimeout"] = {"buy": 1440, "sell": 1440, "exit_timeout_count": 1}
     rpc_mock = patch_RPCManager(mocker)
     cancel_order_mock = MagicMock()
     patch_exchange(mocker)
+    et_mock = mocker.patch('freqtrade.freqtradebot.FreqtradeBot.execute_trade_exit')
     mocker.patch.multiple(
         'freqtrade.exchange.Exchange',
         fetch_ticker=ticker_usdt,
@@ -2171,6 +2181,14 @@ def test_check_handle_timedout_sell_usercustom(default_conf_usdt, ticker_usdt, l
     assert rpc_mock.call_count == 1
     assert open_trade.is_open is True
     assert freqtrade.strategy.check_sell_timeout.call_count == 1
+
+    # 2nd canceled trade ...
+    caplog.clear()
+    open_trade.open_order_id = 'order_id_2'
+    mocker.patch('freqtrade.persistence.Trade.get_exit_order_count', return_value=1)
+    freqtrade.check_handle_timedout()
+    assert log_has_re('Emergencyselling trade.*', caplog)
+    assert et_mock.call_count == 1
 
 
 def test_check_handle_timedout_sell(default_conf_usdt, ticker_usdt, limit_sell_order_old, mocker,
