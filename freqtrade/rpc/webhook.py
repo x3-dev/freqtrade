@@ -54,9 +54,7 @@ class Webhook(RPCHandler):
                 valuedict = self._config['webhook'].get('webhooksellfill', None)
             elif msg['type'] == RPCMessageType.SELL_CANCEL:
                 valuedict = self._config['webhook'].get('webhooksellcancel', None)
-            elif msg['type'] in (RPCMessageType.STATUS,
-                                 RPCMessageType.STARTUP,
-                                 RPCMessageType.WARNING):
+            elif msg['type'] in (RPCMessageType.STATUS, RPCMessageType.STARTUP, RPCMessageType.WARNING):
                 valuedict = self._config['webhook'].get('webhookstatus', None)
             else:
                 raise NotImplementedError(f'Unknown message type: {msg["type"]}')
@@ -66,7 +64,7 @@ class Webhook(RPCHandler):
 
             payload = {key: value.format(**msg) for (key, value) in valuedict.items()}
             if 'type' not in payload.keys():
-                payload['msg_type'] = msg['type']
+                payload['type'] = msg['type']
             self._send_msg(payload)
         except KeyError as exc:
             logger.exception(f"Problem calling Webhook. Please check your webhook configuration. Exception: {exc}")
