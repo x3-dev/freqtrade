@@ -3,6 +3,7 @@ This module manages webhook communication
 """
 import logging
 import requests
+from requests.adapters import HTTPAdapter
 from typing import Any, Dict
 
 from freqtrade.enums import RPCMessageType
@@ -11,6 +12,7 @@ from freqtrade.rpc import RPC, RPCHandler
 logger = logging.getLogger(__name__)
 logger.debug('Included module rpc.webhook ...')
 
+DEFAULT_TIMEOUT = 3 # seconds
 
 class Webhook(RPCHandler):
     """  This class handles all webhook communication """
@@ -56,7 +58,7 @@ class Webhook(RPCHandler):
                 valuedict = self._config['webhook'].get('webhooksellcancel', None)
             elif msg['type'] in (RPCMessageType.STATUS, RPCMessageType.STARTUP, RPCMessageType.WARNING):
                 valuedict = self._config['webhook'].get('webhookstatus', None)
-                valuedict['type'] = msg['type']
+                valuedict['type'] = str(msg['type'])
             else:
                 raise NotImplementedError(f'Unknown message type: {msg["type"]}')
             if not valuedict:
@@ -66,7 +68,6 @@ class Webhook(RPCHandler):
             payload = {key: value.format(**msg) for (key, value) in valuedict.items()}
             if 'exchange' not in payload.keys():
                 payload['exchange'] = self._config['exchange'].get('name')
-
             self._send_msg(payload)
         except KeyError as exc:
             logger.exception(f"Problem calling Webhook. Please check your webhook configuration. Exception: {exc}")
@@ -74,7 +75,7 @@ class Webhook(RPCHandler):
     def _send_msg(self, payload: dict) -> None:
         """ do the actual call to the webhook """
         try:
-            config = dict()
+            config = dict(timeout=0.1)
             if self._format == 'form':
                 config['data'] = payload
             elif self._format == 'json':
