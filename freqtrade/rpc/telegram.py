@@ -219,26 +219,28 @@ class Telegram(RPCHandler):
                 msg['stake_amount'], msg['stake_currency'], msg['fiat_currency'])
         else:
             msg['stake_amount_fiat'] = 0
+        is_fill = msg['type'] == RPCMessageType.BUY_FILL
+        emoji = '\N{CHECK MARK}' if is_fill else '\N{LARGE BLUE CIRCLE}'
 
-        content = []
-        content.append(
-            f"\N{LARGE BLUE CIRCLE} *{msg['exchange']}:* Buying {msg['pair']}"
+        message = (
+            f"{emoji} *{msg['exchange']}:* {'Bought' if is_fill else 'Buying'} {msg['pair']}"
             f" (#{msg['trade_id']})\n"
-        )
-        if msg.get('buy_tag', None):
-            content.append(f"*Buy Tag:* `{msg['buy_tag']}`\n")
-        content.append(f"*Amount:* `{msg['amount']:.8f}`\n")
-        content.append(f"*Open Rate:* `{msg['limit']:.8f}`\n")
-        content.append(f"*Current Rate:* `{msg['current_rate']:.8f}`\n")
-        content.append(
-            f"*Total:* `({round_coin_value(msg['stake_amount'], msg['stake_currency'])}"
-        )
-        if msg.get('fiat_currency', None):
-            content.append(
-                f", {round_coin_value(msg['stake_amount_fiat'], msg['fiat_currency'])}"
             )
+        message += f"*Buy Tag:* `{msg['buy_tag']}`\n" if msg.get('buy_tag', None) else ""
+        message += f"*Amount:* `{msg['amount']:.8f}`\n"
 
-        message = ''.join(content)
+        if msg['type'] == RPCMessageType.BUY_FILL:
+            message += f"*Open Rate:* `{msg['open_rate']:.8f}`\n"
+
+        elif msg['type'] == RPCMessageType.BUY:
+            message += f"*Open Rate:* `{msg['limit']:.8f}`\n"\
+                       f"*Current Rate:* `{msg['current_rate']:.8f}`\n"
+
+        message += f"*Total:* `({round_coin_value(msg['stake_amount'], msg['stake_currency'])}"
+
+        if msg.get('fiat_currency', None):
+            message += f", {round_coin_value(msg['stake_amount_fiat'], msg['fiat_currency'])}"
+
         message += ")`"
         return message
 
@@ -258,27 +260,38 @@ class Telegram(RPCHandler):
                 and self._rpc._fiat_converter):
             msg['profit_fiat'] = self._rpc._fiat_converter.convert_amount(
                 msg['profit_amount'], msg['stake_currency'], msg['fiat_currency'])
-            msg['profit_extra'] = (' ({gain}: {profit_amount:.8f} {stake_currency}'
-                                   ' / {profit_fiat:.3f} {fiat_currency})').format(**msg)
+            msg['profit_extra'] = (
+                f" ({msg['gain']}: {msg['profit_amount']:.8f} {msg['stake_currency']}"
+                f" / {msg['profit_fiat']:.3f} {msg['fiat_currency']})")
         else:
             msg['profit_extra'] = ''
+        is_fill = msg['type'] == RPCMessageType.SELL_FILL
+        message = (
+            f"{msg['emoji']} *{msg['exchange']}:* "
+            f"{'Sold' if is_fill else 'Selling'} {msg['pair']} (#{msg['trade_id']})\n"
+            f"*{'Profit' if is_fill else 'Unrealized Profit'}:* "
+            f"`{msg['profit_ratio']:.2%}{msg['profit_extra']}`\n"
+            f"*Buy Tag:* `{msg['buy_tag']}`\n"
+            f"*Sell Reason:* `{msg['sell_reason']}`\n"
+            f"*Duration:* `{msg['duration']} ({msg['duration_min']:.1f} min)`\n"
+            f"*Amount:* `{msg['amount']:.8f}`\n")
 
-        message = ("{emoji} *{exchange}:* Selling {pair} (#{trade_id})\n"
-                   "*Profit:* `{profit_ratio:.2%}{profit_extra}`\n"
-                   "*Buy Tag:* `{buy_tag}`\n"
-                   "*Sell Reason:* `{sell_reason}`\n"
-                   "*Duration:* `{duration} ({duration_min:.1f} min)`\n"
-                   "*Amount:* `{amount:.8f}`\n"
-                   "*Open Rate:* `{open_rate:.8f}`\n"
-                   "*Current Rate:* `{current_rate:.8f}`\n"
-                   "*Close Rate:* `{limit:.8f}`").format(**msg)
+        if msg['type'] == RPCMessageType.SELL:
+            message += (f"*Open Rate:* `{msg['open_rate']:.8f}`\n"
+                        f"*Current Rate:* `{msg['current_rate']:.8f}`\n"
+                        f"*Close Rate:* `{msg['limit']:.8f}`")
+
+        elif msg['type'] == RPCMessageType.SELL_FILL:
+            message += f"*Close Rate:* `{msg['close_rate']:.8f}`"
 
         return message
 
     def compose_message(self, msg: Dict[str, Any], msg_type: RPCMessageType) -> str:
-
-        if msg_type == RPCMessageType.BUY:
+        if msg_type in [RPCMessageType.BUY, RPCMessageType.BUY_FILL]:
             message = self._format_buy_msg(msg)
+
+        elif msg_type in [RPCMessageType.SELL, RPCMessageType.SELL_FILL]:
+            message = self._format_sell_msg(msg)
 
         elif msg_type in (RPCMessageType.BUY_CANCEL, RPCMessageType.SELL_CANCEL):
             msg['message_side'] = 'buy' if msg_type == RPCMessageType.BUY_CANCEL else 'sell'
@@ -286,26 +299,18 @@ class Telegram(RPCHandler):
                        "Cancelling open {message_side} Order for {pair} (#{trade_id}). "
                        "Reason: {reason}.".format(**msg))
 
-        elif msg_type == RPCMessageType.BUY_FILL:
-            message = ("\N{LARGE CIRCLE} *{exchange}:* "
-                       "Buy order for {pair} (#{trade_id}) filled "
-                       "for {open_rate}.".format(**msg))
-        elif msg_type == RPCMessageType.SELL_FILL:
-            message = ("\N{LARGE CIRCLE} *{exchange}:* "
-                       "Sell order for {pair} (#{trade_id}) filled "
-                       "for {close_rate}.".format(**msg))
-        elif msg_type == RPCMessageType.SELL:
-            message = self._format_sell_msg(msg)
         elif msg_type == RPCMessageType.PROTECTION_TRIGGER:
             message = (
                 "*Protection* triggered due to {reason}. "
                 "`{pair}` will be locked until `{lock_end_time}`."
             ).format(**msg)
+
         elif msg_type == RPCMessageType.PROTECTION_TRIGGER_GLOBAL:
             message = (
                 "*Protection* triggered due to {reason}. "
                 "*All pairs* will be locked until `{lock_end_time}`."
             ).format(**msg)
+
         elif msg_type == RPCMessageType.STATUS:
             message = '*Status:* `{status}`'.format(**msg)
 
@@ -357,7 +362,7 @@ class Telegram(RPCHandler):
         elif float(msg['profit_percent']) >= 0.0:
             return "\N{EIGHT SPOKED ASTERISK}"
         elif msg['sell_reason'] == "stop_loss":
-            return"\N{WARNING SIGN}"
+            return "\N{WARNING SIGN}"
         else:
             return "\N{CROSS MARK}"
 
@@ -681,10 +686,16 @@ class Telegram(RPCHandler):
                 count['losses']
             ] for reason, count in stats['sell_reasons'].items()
         ]
-        sell_reasons_msg = tabulate(
-            sell_reasons_tabulate,
-            headers=['Sell Reason', 'Sells', 'Wins', 'Losses']
-        )
+        sell_reasons_msg = 'No trades yet.'
+        for reason in chunks(sell_reasons_tabulate, 25):
+            sell_reasons_msg = tabulate(
+                reason,
+                headers=['Sell Reason', 'Sells', 'Wins', 'Losses']
+            )
+            if len(sell_reasons_tabulate) > 25:
+                self._send_msg(sell_reasons_msg, ParseMode.MARKDOWN)
+                sell_reasons_msg = ''
+
         durations = stats['durations']
         duration_msg = tabulate(
             [
@@ -1233,44 +1244,56 @@ class Telegram(RPCHandler):
         forcebuy_text = ("*/forcebuy <pair> [<rate>]:* `Instantly buys the given pair. "
                          "Optionally takes a rate at which to buy "
                          "(only applies to limit orders).` \n")
-        message = ("*/start:* `Starts the trader`\n"
-                   "*/stop:* `Stops the trader`\n"
-                   "*/status <trade_id>|[table]:* `Lists all open trades`\n"
-                   "         *<trade_id> :* `Lists one or more specific trades.`\n"
-                   "                        `Separate multiple <trade_id> with a blank space.`\n"
-                   "         *table :* `will display trades in a table`\n"
-                   "                `pending buy orders are marked with an asterisk (*)`\n"
-                   "                `pending sell orders are marked with a double asterisk (**)`\n"
-                   "*/buys <pair|none>:* `Shows the buy_tag performance`\n"
-                   "*/sells <pair|none>:* `Shows the sell reason performance`\n"
-                   "*/mix_tags <pair|none>:* `Shows combined buy tag + sell reason performance`\n"
-                   "*/trades [limit]:* `Lists last closed trades (limited to 10 by default)`\n"
-                   "*/profit [<n>]:* `Lists cumulative profit from all finished trades, "
-                   "over the last n days`\n"
-                   "*/forcesell <trade_id>|all:* `Instantly sells the given trade or all trades, "
-                   "regardless of profit`\n"
-                   f"{forcebuy_text if self._config.get('forcebuy_enable', False) else ''}"
-                   "*/delete <trade_id>:* `Instantly delete the given trade in the database`\n"
-                   "*/performance:* `Show performance of each finished trade grouped by pair`\n"
-                   "*/daily <n>:* `Shows profit or loss per day, over the last n days`\n"
-                   "*/stats:* `Shows Wins / losses by Sell reason as well as "
-                   "Avg. holding durationsfor buys and sells.`\n"
-                   "*/count:* `Show number of active trades compared to allowed number of trades`\n"
-                   "*/locks:* `Show currently locked pairs`\n"
-                   "*/unlock <pair|id>:* `Unlock this Pair (or this lock id if it's numeric)`\n"
-                   "*/balance:* `Show account balance per currency`\n"
-                   "*/stopbuy:* `Stops buying, but handles open trades gracefully` \n"
-                   "*/reload_config:* `Reload configuration file` \n"
-                   "*/show_config:* `Show running configuration` \n"
-                   "*/logs [limit]:* `Show latest logs - defaults to 10` \n"
-                   "*/whitelist:* `Show current whitelist` \n"
-                   "*/blacklist [pair]:* `Show current blacklist, or adds one or more pairs "
-                   "to the blacklist.` \n"
-                   "*/edge:* `Shows validated pairs by Edge if it is enabled` \n"
-                   "*/help:* `This help message`\n"
-                   "*/version:* `Show version`")
+        message = (
+            "_BotControl_\n"
+            "------------\n"
+            "*/start:* `Starts the trader`\n"
+            "*/stop:* Stops the trader\n"
+            "*/stopbuy:* `Stops buying, but handles open trades gracefully` \n"
+            "*/forcesell <trade_id>|all:* `Instantly sells the given trade or all trades, "
+            "regardless of profit`\n"
+            f"{forcebuy_text if self._config.get('forcebuy_enable', False) else ''}"
+            "*/delete <trade_id>:* `Instantly delete the given trade in the database`\n"
+            "*/whitelist:* `Show current whitelist` \n"
+            "*/blacklist [pair]:* `Show current blacklist, or adds one or more pairs "
+            "to the blacklist.` \n"
+            "*/reload_config:* `Reload configuration file` \n"
+            "*/unlock <pair|id>:* `Unlock this Pair (or this lock id if it's numeric)`\n"
 
-        self._send_msg(message)
+            "_Current state_\n"
+            "------------\n"
+            "*/show_config:* `Show running configuration` \n"
+            "*/locks:* `Show currently locked pairs`\n"
+            "*/balance:* `Show account balance per currency`\n"
+            "*/logs [limit]:* `Show latest logs - defaults to 10` \n"
+            "*/count:* `Show number of active trades compared to allowed number of trades`\n"
+            "*/edge:* `Shows validated pairs by Edge if it is enabled` \n"
+
+            "_Statistics_\n"
+            "------------\n"
+            "*/status <trade_id>|[table]:* `Lists all open trades`\n"
+            "         *<trade_id> :* `Lists one or more specific trades.`\n"
+            "                        `Separate multiple <trade_id> with a blank space.`\n"
+            "         *table :* `will display trades in a table`\n"
+            "                `pending buy orders are marked with an asterisk (*)`\n"
+            "                `pending sell orders are marked with a double asterisk (**)`\n"
+            "*/buys <pair|none>:* `Shows the buy_tag performance`\n"
+            "*/sells <pair|none>:* `Shows the sell reason performance`\n"
+            "*/mix_tags <pair|none>:* `Shows combined buy tag + sell reason performance`\n"
+            "*/trades [limit]:* `Lists last closed trades (limited to 10 by default)`\n"
+            "*/profit [<n>]:* `Lists cumulative profit from all finished trades, "
+            "over the last n days`\n"
+            "*/performance:* `Show performance of each finished trade grouped by pair`\n"
+            "*/daily <n>:* `Shows profit or loss per day, over the last n days`\n"
+            "*/weekly <n>:* `Shows statistics per week, over the last n weeks`\n"
+            "*/monthly <n>:* `Shows statistics per month, over the last n months`\n"
+            "*/stats:* `Shows Wins / losses by Sell reason as well as "
+            "Avg. holding durationsfor buys and sells.`\n"
+            "*/help:* `This help message`\n"
+            "*/version:* `Show version`"
+            )
+
+        self._send_msg(message, parse_mode=ParseMode.MARKDOWN)
 
     @authorized_only
     def _version(self, update: Update, context: CallbackContext) -> None:
