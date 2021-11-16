@@ -11,6 +11,7 @@ from freqtrade.rpc import RPC, RPCException, RPCHandler
 logger = logging.getLogger(__name__)
 logger.debug('Included module rpc.telegram.channel ...')
 
+
 class Telegram(RPCHandler):
 
     def __init__(self, rpc: RPC, config: dict) -> None:
@@ -51,33 +52,47 @@ class Telegram(RPCHandler):
             return
 
         message = self.compose_message(msg, msg_type)
-        self._send_msg(message, parse_mode=ParseMode.HTML)
+        self._send_msg(message, msg_type, parse_mode=ParseMode.HTML)
 
-    def _send_msg(self, msg: str, parse_mode: str = ParseMode.HTML) -> None:
-        try:
+
+    def _send_msg(self, msg: str, msg_type: RPCMessageType, parse_mode: str = ParseMode.HTML) -> None:
+        chat_ids = []
+        master = self._config['channel'].get('master', [])
+        if len(master) and msg_type not in [RPCMessageType.STARTUP]:
+            for item in master:
+                for name,id in item.items():
+                    namespace = name.split('-')[0]
+                    chat_ids.append(id)
+
+        slave = self._config['channel'].get('chat_id', '')
+        if slave and msg_type not in [RPCMessageType.STARTUP, RPCMessageType.STATUS]:
+            chat_ids.append(self._config['channel']['chat_id'])
+
+        for chat_id in chat_ids:
             try:
-                self._bot.send_message(
-                    self._config['channel']['chat_id'],
-                    text=msg,
-                    parse_mode=parse_mode
-                )
-            except NetworkError as network_err:
-                # Sometimes the telegram server resets the current connection,
-                # if this is the case we send the message again.
+                try:
+                    self._bot.send_message(
+                        chat_id,
+                        text=msg,
+                        parse_mode=parse_mode
+                    )
+                except NetworkError as network_err:
+                    # Sometimes the telegram server resets the current connection,
+                    # if this is the case we send the message again.
+                    logger.warning(
+                        'Telegram NetworkError: %s! Trying one more time.',
+                        network_err.message
+                    )
+                    self._bot.send_message(
+                        chat_id,
+                        text=msg,
+                        parse_mode=parse_mode
+                    )
+            except TelegramError as telegram_err:
                 logger.warning(
-                    'Telegram NetworkError: %s! Trying one more time.',
-                    network_err.message
+                    'TelegramError: %s! Giving up on that message.',
+                    telegram_err.message
                 )
-                self._bot.send_message(
-                    self._config['channel']['chat_id'],
-                    text=msg,
-                    parse_mode=parse_mode
-                )
-        except TelegramError as telegram_err:
-            logger.warning(
-                'TelegramError: %s! Giving up on that message.',
-                telegram_err.message
-            )
 
     def _format_buy_msg(self, msg: dict) -> str:
         msg['stake_amount_fiat'] = 0.0
