@@ -59,6 +59,8 @@ class Webhook(RPCHandler):
             elif msg['type'] in (RPCMessageType.STATUS, RPCMessageType.STARTUP, RPCMessageType.WARNING):
                 valuedict = self._config['webhook'].get('webhookstatus', None)
                 valuedict['type'] = str(msg['type'])
+            elif msg_type in (RPCMessageType.PROTECTION_TRIGGER, RPCMessageType.PROTECTION_TRIGGER_GLOBAL):
+                valuedict = msg
             else:
                 raise NotImplementedError(f'Unknown message type: {msg["type"]}')
             if not valuedict:

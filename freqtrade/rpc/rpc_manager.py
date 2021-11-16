@@ -41,6 +41,12 @@ class RPCManager:
             apiserver.add_rpc_handler(self._rpc)
             self.registered_modules.append(apiserver)
 
+        # Enable telegram channel
+        if config.get('channel', {}).get('enabled', False):
+            logger.info('Enabling rpc.telegram.channel ...')
+            from freqtrade.rpc._telegram import Telegram
+            self.registered_modules.append(Telegram(self._rpc, config))
+
     def cleanup(self) -> None:
         """ Stops all enabled rpc modules """
         logger.info('Cleaning up rpc modules ...')
