@@ -6,6 +6,9 @@ from telegram.error import BadRequest, NetworkError, TelegramError
 from freqtrade.__init__ import __version__
 from freqtrade.constants import DUST_PER_COIN
 from freqtrade.enums import RPCMessageType
+from freqtrade.exceptions import OperationalException
+from freqtrade.misc import chunks, plural, round_coin_value
+from freqtrade.persistence import Trade
 from freqtrade.rpc import RPC, RPCException, RPCHandler
 
 logger = logging.getLogger(__name__)
@@ -96,8 +99,8 @@ class Telegram(RPCHandler):
 
     def _format_buy_msg(self, msg: dict) -> str:
         msg['stake_amount_fiat'] = 0.0
-        if self._fiat_converter:
-            msg['stake_amount_fiat'] = self._fiat_converter.convert_amount(
+        if self._rpc._fiat_converter:
+            msg['stake_amount_fiat'] = self._rpc._fiat_converter.convert_amount(
                 msg['stake_amount'], msg['stake_currency'], msg['fiat_currency']
             )
         message = [f"\N{LARGE BLUE DIAMOND} <b>{msg['exchange'].upper()}:{msg['uid']}</b>"]
@@ -123,8 +126,8 @@ class Telegram(RPCHandler):
         msg['emoji'] = self._get_sell_emoji(msg)
 
         msg['profit_extra'] = None
-        if (all(prop in msg for prop in ['gain', 'fiat_currency', 'stake_currency']) and self._fiat_converter):
-            msg['profit_fiat'] = self._fiat_converter.convert_amount(
+        if (all(prop in msg for prop in ['gain', 'fiat_currency', 'stake_currency']) and self._rpc._fiat_converter):
+            msg['profit_fiat'] = self._rpc._fiat_converter.convert_amount(
                 msg['profit_amount'],
                 msg['stake_currency'],
                 msg['fiat_currency']
