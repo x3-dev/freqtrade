@@ -55,21 +55,21 @@ class Telegram(RPCHandler):
             return
 
         message = self.compose_message(msg, msg_type)
-        self._send_msg(message, msg_type, parse_mode=ParseMode.HTML)
+        self._send_msg(message, msg_type, parse_mode=ParseMode.HTML, disable_notification=(noti == 'silent'))
 
 
-    def _send_msg(self, msg: str, msg_type: RPCMessageType, parse_mode: str = ParseMode.HTML) -> None:
+    def _send_msg(self, msg: str, msg_type: RPCMessageType, parse_mode: str = ParseMode.HTML, disable_notification: bool = False) -> None:
         chat_ids = []
         master = self._config['channel'].get('master', [])
+        slave = self._config['channel'].get('chat_id', '')
         if len(master) and msg_type not in [RPCMessageType.STARTUP]:
             for item in master:
                 for name,id in item.items():
                     namespace = name.split('-')[0]
                     chat_ids.append(id)
 
-        slave = self._config['channel'].get('chat_id', '')
         if slave and msg_type not in [RPCMessageType.STARTUP, RPCMessageType.STATUS]:
-            chat_ids.append(self._config['channel']['chat_id'])
+            chat_ids.append(slave)
 
         for chat_id in chat_ids:
             try:
@@ -77,24 +77,22 @@ class Telegram(RPCHandler):
                     self._bot.send_message(
                         chat_id,
                         text=msg,
-                        parse_mode=parse_mode
+                        parse_mode=parse_mode,
+                        disable_notification=disable_notification
                     )
-                except NetworkError as network_err:
-                    # Sometimes the telegram server resets the current connection,
-                    # if this is the case we send the message again.
+                except NetworkError as err:
                     logger.warning(
-                        'Telegram NetworkError: %s! Trying one more time.',
-                        network_err.message
+                        'Telegram NetworkError: %s! Trying one more time.', err.message
                     )
                     self._bot.send_message(
                         chat_id,
                         text=msg,
-                        parse_mode=parse_mode
+                        parse_mode=parse_mode,
+                        disable_notification=disable_notification
                     )
-            except TelegramError as telegram_err:
+            except TelegramError as err:
                 logger.warning(
-                    'TelegramError: %s! Giving up on that message.',
-                    telegram_err.message
+                    'TelegramError: %s! Giving up on that message.', err.message
                 )
 
     def _format_buy_msg(self, msg: dict) -> str:
@@ -103,8 +101,8 @@ class Telegram(RPCHandler):
             msg['stake_amount_fiat'] = self._rpc._fiat_converter.convert_amount(
                 msg['stake_amount'], msg['stake_currency'], msg['fiat_currency']
             )
-        message = [f"\N{LARGE BLUE DIAMOND} <b>{msg['exchange'].upper()}:{msg['uid']}</b>"]
-        message += [f"* <em>Order BUY, {msg['pair']} trade #{msg['trade_id']}</em>"]
+        message = [f"\N{LARGE BLUE DIAMOND} <b>{msg['exchange'].upper()}:{msg['uid']}, #{msg['trade_id']}</b>"]
+        message += [f"* <em>Order BUY, {msg['pair']} created</em>"]
         # if msg.get('buy_tag', None):
             # message += [f"- Tag: {msg['buy_tag']}"]
         message += [f"- Amount: {msg['amount']:.8f}"]
@@ -132,11 +130,11 @@ class Telegram(RPCHandler):
                 msg['stake_currency'],
                 msg['fiat_currency']
             )
-            msg['profit_extra'] = ('{stake_currency} {profit_amount:.4f} / {fiat_currency} {profit_fiat:.2f})').format(**msg)
+            msg['profit_extra'] = ('{profit_amount:.4f} {stake_currency} / {profit_fiat:.2f} {fiat_currency}').format(**msg)
 
         is_fill = msg['type'] == RPCMessageType.SELL_FILL
-        message = ["{emoji} <b>{exchange}:{uid}</b>"]
-        message += ["* <em>Order SELL, {pair} trade #{trade_id}</em>"]
+        message = ["{emoji} <b>{exchange}:{uid}, #{trade_id}</b>"]
+        message += ["* <em>Order SELL, {pair} created</em>"]
         message += ["- Profit: {profit_percent:.2f}%"]
         if msg.get('profit_extra', None):
             message += [f'- {msg["gain"].capitalize()}: {msg["profit_extra"]}']
@@ -150,7 +148,6 @@ class Telegram(RPCHandler):
         message += ["- Rate, current: {current_rate:.8f}"]
         message += ["- Rate, close: {limit:.8f}"]
         return '\n'.join(message).format(**msg)
-
 
     def compose_message(self, msg: dict, msg_type: RPCMessageType) -> str:
         message = 'NONE'
@@ -168,33 +165,28 @@ class Telegram(RPCHandler):
         if msg_type == RPCMessageType.BUY:
             message = self._format_buy_msg(msg)
 
+        elif msg_type == RPCMessageType.SELL:
+            message = self._format_sell_msg(msg)
+
         elif msg_type == RPCMessageType.BUY_FILL:
-            message = ["\N{SPARKLE} <b>{exchange}:{uid}</b>"]
-            message += ["<em>* Order BUY, {pair}, trade #{trade_id} filled</em>"]
+            message = ["\N{BLUE CIRCLE} <b>{exchange}:{uid}, #{trade_id}</b>"]
+            message += ["<em>* Order BUY, {pair} filled</em>"]
             message += ["- Amount: {amount}"]
             message += ["- Rate: {open_rate}"]
             message = '\n'.join(message).format(**msg)
 
-
-        elif msg_type == RPCMessageType.SELL:
-            message = self._format_sell_msg(msg)
-
         elif msg_type == RPCMessageType.SELL_FILL:
-            message = ["\N{SPARKLE} <b>{exchange}:{uid}</b>"]
-            message += ["<em>* Order SELL, {pair}, trade #{trade_id} filled</em>"]
+            message = ["\N{RED CIRCLE} <b>{exchange}:{uid}, #{trade_id}</b>"]
+            message += ["<em>* Order SELL, {pair} filled</em>"]
             message += ["- Profit: {profit_amount:.4f} {stake_currency}"]
             message += ["- Amount: {amount}"]
             message += ["- Rate: {close_rate}"]
             message = '\n'.join(message).format(**msg)
 
         elif msg_type in (RPCMessageType.BUY_CANCEL, RPCMessageType.SELL_CANCEL):
-            if not msg.get('reason', None):
-                msg['reason'] = 'timeout'
-            if msg_type == RPCMessageType.SELL_CANCEL and msg.get('sell_reason', None):
-                msg['reason'] = msg.get('sell_reason', None)
             msg['side'] = 'BUY' if msg['type'] == RPCMessageType.BUY_CANCEL else 'SELL'
-            message = ["\N{WARNING SIGN} {exchange}:{uid}"]
-            message += ["<em>* Cancel {side} order, {pair}, trade #{trade_id}</em>"]
+            message = ["\N{WARNING SIGN} {exchange}:{uid}, #{trade_id}"]
+            message += ["<em>* Order {side}, {pair}, canceled</em>"]
             message += ["- Reason: {reason}"]
             message = '\n'.join(message).format(**msg)
 
@@ -214,15 +206,13 @@ class Telegram(RPCHandler):
             message = '\N{WARNING SIGN} <b>{exchange}:{uid}</b>\n* Warning: {type} {status}'.format(**msg)
 
         elif msg_type == RPCMessageType.STARTUP:
-            status = msg.get('status', '')
             message = '<b>{exchange}:{uid}</b>\n- Type: {type}\n* <em>{status}</em>'.format(**msg)
 
-        # else:
-            # raise Warning(f"{msg.get('exchange', None)}:{msg.get('uid', None)} Unknown message type: {msg_type}")
+        else:
+            raise Warning(f"{msg.get('exchange', None)}:{msg.get('uid', None)} Unknown message type: {msg_type}")
 
-        logger.info(f"Proccessing to message type {msg_type} | body: {msg}")
+        # logger.info(f"Proccessing to message type {msg_type} | body: {msg}")
         return message
-
 
     def _get_sell_emoji(self, msg: dict) -> str:
         if float(msg['profit_percent']) >= 5.0:
