@@ -169,14 +169,14 @@ class Telegram(RPCHandler):
             message = self._format_sell_msg(msg)
 
         elif msg_type == RPCMessageType.BUY_FILL:
-            message = ["\N{BLUE CIRCLE} <b>{exchange}:{uid}, #{trade_id}</b>"]
+            message = ["\N{LARGE BLUE CIRCLE} <b>{exchange}:{uid}, #{trade_id}</b>"]
             message += ["<em>* Order BUY, {pair} filled</em>"]
             message += ["- Amount: {amount}"]
             message += ["- Rate: {open_rate}"]
             message = '\n'.join(message).format(**msg)
 
         elif msg_type == RPCMessageType.SELL_FILL:
-            message = ["\N{RED CIRCLE} <b>{exchange}:{uid}, #{trade_id}</b>"]
+            message = ["\N{LARGE RED CIRCLE} <b>{exchange}:{uid}, #{trade_id}</b>"]
             message += ["<em>* Order SELL, {pair} filled</em>"]
             message += ["- Profit: {profit_amount:.4f} {stake_currency}"]
             message += ["- Amount: {amount}"]
@@ -185,7 +185,7 @@ class Telegram(RPCHandler):
 
         elif msg_type in (RPCMessageType.BUY_CANCEL, RPCMessageType.SELL_CANCEL):
             msg['side'] = 'BUY' if msg['type'] == RPCMessageType.BUY_CANCEL else 'SELL'
-            message = ["\N{WARNING SIGN} {exchange}:{uid}, #{trade_id}"]
+            message = ["\N{WARNING SIGN} <b>{exchange}:{uid}, #{trade_id}</b>"]
             message += ["<em>* Order {side}, {pair}, canceled</em>"]
             message += ["- Reason: {reason}"]
             message = '\n'.join(message).format(**msg)
