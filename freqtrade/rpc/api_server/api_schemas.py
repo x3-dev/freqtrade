@@ -142,20 +142,10 @@ class UnfilledTimeout(BaseModel):
     exit_timeout_count: Optional[int]
 
 
-<<<<<<< HEAD
 class OrderTypeValues(str, Enum):
     limit = 'limit'
     market = 'market'
 
-=======
-class OrderTypeValues(Enum):
-    limit = 'limit'
-    market = 'market'
-
-    class Config:
-        use_enum_values = True
-
->>>>>>> 8291b892e8dabe210b951c13b2e359c152e9b991
 
 class OrderTypes(BaseModel):
     buy: OrderTypeValues

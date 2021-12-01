@@ -3,10 +3,14 @@ pandas==1.3.4
 pandas-ta==0.3.14b
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 ccxt==1.62.42
 =======
 ccxt==1.61.92
 >>>>>>> 8291b892e8dabe210b951c13b2e359c152e9b991
+=======
+ccxt==1.62.42
+>>>>>>> 0375a083029ff1ba2a88944b0dd8d79b929651e3
 # Pin cryptography for now due to rust build errors with piwheels
 cryptography==36.0.0
 aiohttp==3.8.1

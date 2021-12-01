@@ -21,10 +21,14 @@ nbconvert==6.3.0
 
 # mypy types
 <<<<<<< HEAD
+<<<<<<< HEAD
 types-cachetools==4.2.6
 =======
 types-cachetools==4.2.5
 >>>>>>> 8291b892e8dabe210b951c13b2e359c152e9b991
+=======
+types-cachetools==4.2.6
+>>>>>>> 0375a083029ff1ba2a88944b0dd8d79b929651e3
 types-filelock==3.2.1
 types-requests==2.26.1
 types-tabulate==0.8.3
