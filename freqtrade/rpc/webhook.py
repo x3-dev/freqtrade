@@ -2,17 +2,19 @@
 This module manages webhook communication
 """
 import logging
-import requests
-from requests.adapters import HTTPAdapter
+import time
 from typing import Any, Dict
+
+from requests import RequestException, post
 
 from freqtrade.enums import RPCMessageType
 from freqtrade.rpc import RPC, RPCHandler
 
+
 logger = logging.getLogger(__name__)
+
 logger.debug('Included module rpc.webhook ...')
 
-DEFAULT_TIMEOUT = 3 # seconds
 
 class Webhook(RPCHandler):
     """  This class handles all webhook communication """
@@ -28,11 +30,8 @@ class Webhook(RPCHandler):
 
         self._url = self._config['webhook']['url']
         self._format = self._config['webhook'].get('format', 'form')
-
-        if self._format not in ('form', 'json'):
-            raise NotImplementedError(
-                f'Unknown webhook format `{self._format}`, possible values are `form` (default) and `json`'
-            )
+        self._retries = self._config['webhook'].get('retries', 0)
+        self._retry_delay = self._config['webhook'].get('retry_delay', 0.1)
 
     def cleanup(self) -> None:
         """
@@ -44,6 +43,7 @@ class Webhook(RPCHandler):
     def send_msg(self, msg: Dict[str, Any]) -> None:
         """ Send a message to telegram channel """
         try:
+
             if msg['type'] == RPCMessageType.BUY:
                 valuedict = self._config['webhook'].get('webhookbuy', None)
             elif msg['type'] == RPCMessageType.BUY_CANCEL:
@@ -56,40 +56,49 @@ class Webhook(RPCHandler):
                 valuedict = self._config['webhook'].get('webhooksellfill', None)
             elif msg['type'] == RPCMessageType.SELL_CANCEL:
                 valuedict = self._config['webhook'].get('webhooksellcancel', None)
-            elif msg['type'] in (RPCMessageType.STATUS, RPCMessageType.STARTUP, RPCMessageType.WARNING):
+            elif msg['type'] in (RPCMessageType.STATUS,
+                                 RPCMessageType.STARTUP,
+                                 RPCMessageType.WARNING):
                 valuedict = self._config['webhook'].get('webhookstatus', None)
-                valuedict['type'] = str(msg['type'])
-            elif msg_type in (RPCMessageType.PROTECTION_TRIGGER, RPCMessageType.PROTECTION_TRIGGER_GLOBAL):
-                valuedict = msg
             else:
-                raise NotImplementedError(f'Unknown message type: {msg["type"]}')
+                raise NotImplementedError('Unknown message type: {}'.format(msg['type']))
             if not valuedict:
-                logger.info(f'Message type {msg["type"]} not configured for webhooks')
+                logger.info("Message type '%s' not configured for webhooks", msg['type'])
                 return
 
             payload = {key: value.format(**msg) for (key, value) in valuedict.items()}
-            if 'exchange' not in payload.keys():
-                payload['exchange'] = self._config['exchange'].get('name')
             self._send_msg(payload)
         except KeyError as exc:
-            logger.exception(f"Problem calling Webhook. Please check your webhook configuration. Exception: {exc}")
+            logger.exception("Problem calling Webhook. Please check your webhook configuration. "
+                             "Exception: %s", exc)
 
     def _send_msg(self, payload: dict) -> None:
-        """ do the actual call to the webhook """
-        try:
-            config = dict(timeout=0.1)
-            if self._format == 'form':
-                config['data'] = payload
-            elif self._format == 'json':
-                config['json'] = payload
-            else:
-                raise NotImplementedError(f'Unknown format: {self._format}')
+        """do the actual call to the webhook"""
 
-            if self._config['webhook'].get('auth', {}):
-                config['auth'] = (
-                    self._config['webhook'].get('auth').get('user'),
-                    self._config['webhook'].get('auth').get('password')
-                )
-            requests.post(self._url, **config)
-        except requests.RequestException as err:
-            logger.warning(f"Could not call webhook url. Exception: {err}")
+        success = False
+        attempts = 0
+        while not success and attempts <= self._retries:
+            if attempts:
+                if self._retry_delay:
+                    time.sleep(self._retry_delay)
+                logger.info("Retrying webhook...")
+
+            attempts += 1
+
+            try:
+                if self._format == 'form':
+                    response = post(self._url, data=payload)
+                elif self._format == 'json':
+                    response = post(self._url, json=payload)
+                elif self._format == 'raw':
+                    response = post(self._url, data=payload['data'],
+                                    headers={'Content-Type': 'text/plain'})
+                else:
+                    raise NotImplementedError('Unknown format: {}'.format(self._format))
+
+                # Throw a RequestException if the post was not successful
+                response.raise_for_status()
+                success = True
+
+            except RequestException as exc:
+                logger.warning("Could not call webhook url. Exception: %s", exc)
