@@ -1,6 +1,7 @@
 """
 This module manages webhook communication
 """
+
 import logging
 import time
 from typing import Any, Dict
