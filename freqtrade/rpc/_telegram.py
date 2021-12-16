@@ -32,6 +32,7 @@ class Telegram(RPCHandler):
     def _init(self) -> None:
         self._bot = Bot(self._config['channel']['token'])
 
+
     def send_msg(self, msg: dict) -> None:
         """ Send a message to telegram channel """
 
@@ -60,11 +61,11 @@ class Telegram(RPCHandler):
 
     def _send_msg(self, msg: str, msg_type: RPCMessageType, parse_mode: str = ParseMode.HTML, disable_notification: bool = False) -> None:
         chat_ids = []
-        master = self._config['channel'].get('master', [])
+        master_ids = self._config['channel'].get('master', [])
         slave = self._config['channel'].get('chat_id', '')
-        if len(master) and msg_type not in [RPCMessageType.STARTUP]:
-            for item in master:
-                for name,id in item.items():
+        if len(master_ids) and msg_type not in [RPCMessageType.STARTUP]:
+            for master in master_ids:
+                for name,id in master.items():
                     namespace = name.split('-')[0]
                     chat_ids.append(id)
 
@@ -95,19 +96,28 @@ class Telegram(RPCHandler):
                     'TelegramError: %s! Giving up on that message.', err.message
                 )
 
+
     def _format_buy_msg(self, msg: dict) -> str:
-        msg['stake_amount_fiat'] = 0.0
+        msg['stake_amount_fiat'] = 0
         if self._rpc._fiat_converter:
             msg['stake_amount_fiat'] = self._rpc._fiat_converter.convert_amount(
                 msg['stake_amount'], msg['stake_currency'], msg['fiat_currency']
             )
-        message = [f"\N{LARGE BLUE DIAMOND} <b>{msg['exchange'].upper()}:{msg['uid']}, #{msg['trade_id']}</b>"]
-        message += [f"* <em>Order BUY, {msg['pair']} created</em>"]
-        # if msg.get('buy_tag', None):
-            # message += [f"- Tag: {msg['buy_tag']}"]
-        message += [f"- Amount: {msg['amount']:.8f}"]
-        message += [f"- Rate, open: {msg['limit']:.8f}"]
-        message += [f"- Rate, current: {msg['current_rate']:.8f}"]
+
+        is_fill = bool(msg['type'] == RPCMessageType.BUY_FILL)
+        msg['emoji'] = '\N{CHECK MARK}' if is_fill else '\N{LARGE BLUE DIAMOND}'
+
+        message = [f"{msg['emoji']} <b>{msg['exchange'].upper()}:{msg['uid']}, #{msg['trade_id']}</b>"]
+        message += [f"* <em>Order BUY {'- FILLED' if is_fill else '- CREATED'}, {msg['pair']}</em>"]
+        if msg.get('buy_tag', None):
+            message += [f"- Tag: {msg['buy_tag']}"]
+        message += [f"- Amount: {msg['amount']:.4f}"]
+
+        if msg['type'] == RPCMessageType.BUY_FILL:
+            message += [f"- Rate, open: {msg['open_rate']:.4f}"]
+        elif msg['type'] == RPCMessageType.BUY:
+            message += [f"- Rate, open: {msg['limit']:.4f}"]
+            message += [f"- Rate, current: {msg['current_rate']:.4f}"]
 
         total = f"- Total: {round_coin_value(msg['stake_amount'], msg['stake_currency'])}"
         if msg.get('fiat_currency', None):
@@ -115,13 +125,16 @@ class Telegram(RPCHandler):
         message += [total]
         return '\n'.join(message)
 
+
     def _format_sell_msg(self, msg: dict) -> str:
-        msg['amount'] = round(msg['amount'], 8)
+        msg['amount'] = round(msg['amount'], 4)
         msg['profit_percent'] = round(msg['profit_ratio'] * 100, 2)
         msg['duration'] = msg['close_date'].replace(microsecond=0) - msg['open_date'].replace(microsecond=0)
         msg['duration_min'] = msg['duration'].total_seconds() / 60
-        msg['buy_tag'] = msg['buy_tag'] if "buy_tag" in msg.keys() else None
-        msg['emoji'] = self._get_sell_emoji(msg)
+
+        is_fill = bool(msg['type'] == RPCMessageType.SELL_FILL)
+        msg['buy_tag'] = msg['buy_tag'] if 'buy_tag' in msg.keys() else None
+        msg['emoji'] = '\N{LARGE RED CIRCLE}' if is_fill else self._get_sell_emoji(msg)
 
         msg['profit_extra'] = None
         if (all(prop in msg for prop in ['gain', 'fiat_currency', 'stake_currency']) and self._rpc._fiat_converter):
@@ -132,22 +145,27 @@ class Telegram(RPCHandler):
             )
             msg['profit_extra'] = ('{profit_amount:.4f} {stake_currency} / {profit_fiat:.2f} {fiat_currency}').format(**msg)
 
-        is_fill = msg['type'] == RPCMessageType.SELL_FILL
-        message = ["{emoji} <b>{exchange}:{uid}, #{trade_id}</b>"]
-        message += ["* <em>Order SELL, {pair} created</em>"]
-        message += ["- Profit: {profit_percent:.2f}%"]
+        message = [f"{msg['emoji']} <b>{msg['exchange']}:{msg['uid']}, #{msg['trade_id']}</b>"]
+        message += [f"* <em>Order SELL {'- FILLED' if is_fill else '- CREATED'}, {msg['pair']}</em>"]
+        message += [f"- {'Profit' if is_fill else 'Opportunity'}: {msg['profit_ratio']:.2f}%"]
         if msg.get('profit_extra', None):
-            message += [f'- {msg["gain"].capitalize()}: {msg["profit_extra"]}']
-        # if msg.get('sell_tag', None) or msg.get('buy_tag', None):
-            # tag = msg.get('sell_tag', None) or msg.get('buy_tag', None)
-            # message += [f"- Tag: {tag}"]
-        message += ["- Reason: {sell_reason}"]
-        message += ["- Duration: {duration} ({duration_min:.1f}min)"]
-        message += ["- Amount: {amount:.8f}"]
-        message += ["- Rate, open: {open_rate:.8f}"]
-        message += ["- Rate, current: {current_rate:.8f}"]
-        message += ["- Rate, close: {limit:.8f}"]
-        return '\n'.join(message).format(**msg)
+            message += [f"- {msg['gain'].capitalize()}: {msg['profit_extra']}"]
+        message += [f"- BUY Tag: {msg['buy_tag']}"]
+        if msg.get('exit_tag', None):
+            message += [f"- SELL Tag: {msg['exit_tag']}"]
+        message += [f"- Reason: {msg['sell_reason'] and msg['sell_reason'].upper()}"]
+        message += [f"- Duration: {msg['duration']} ({msg['duration_min']:.1f}m)"]
+        message += [f"- Amount: {msg['amount']:.4f}"]
+        message += [f"- Rate, open: {msg['open_rate']:.4f}"]
+
+        if msg['type'] == RPCMessageType.SELL:
+            message += [f"- Rate, current: {msg['current_rate']:.4f}"]
+            message += [f"- Rate, close: {msg['limit']:.4f}"]
+
+        elif msg['type'] == RPCMessageType.SELL_FILL:
+            message += [f"- Rate, close: {msg['limit']:.4f}"]
+
+        return '\n'.join(message)
 
     def compose_message(self, msg: dict, msg_type: RPCMessageType) -> str:
         message = 'NONE'
@@ -162,26 +180,31 @@ class Telegram(RPCHandler):
                 # else:
                     # msg[key] = 0.0
 
-        if msg_type == RPCMessageType.BUY:
+        if msg_type in [RPCMessageType.BUY, RPCMessageType.BUY_FILL]:
             message = self._format_buy_msg(msg)
 
-        elif msg_type == RPCMessageType.SELL:
+        # if msg_type == RPCMessageType.BUY:
+            # message = self._format_buy_msg(msg)
+
+        # elif msg_type == RPCMessageType.BUY_FILL:
+            # message = ["\N{LARGE BLUE CIRCLE} <b>{exchange}:{uid}, #{trade_id}</b>"]
+            # message += ["<em>* Order BUY, {pair} filled</em>"]
+            # message += ["- Amount: {amount}"]
+            # message += ["- Rate: {open_rate}"]
+            # message = '\n'.join(message).format(**msg)
+
+        elif msg_type in [RPCMessageType.SELL, RPCMessageType.SELL_FILL]:
             message = self._format_sell_msg(msg)
 
-        elif msg_type == RPCMessageType.BUY_FILL:
-            message = ["\N{LARGE BLUE CIRCLE} <b>{exchange}:{uid}, #{trade_id}</b>"]
-            message += ["<em>* Order BUY, {pair} filled</em>"]
-            message += ["- Amount: {amount}"]
-            message += ["- Rate: {open_rate}"]
-            message = '\n'.join(message).format(**msg)
-
-        elif msg_type == RPCMessageType.SELL_FILL:
-            message = ["\N{LARGE RED CIRCLE} <b>{exchange}:{uid}, #{trade_id}</b>"]
-            message += ["<em>* Order SELL, {pair} filled</em>"]
-            message += ["- Profit: {profit_amount:.4f} {stake_currency}"]
-            message += ["- Amount: {amount}"]
-            message += ["- Rate: {close_rate}"]
-            message = '\n'.join(message).format(**msg)
+        # elif msg_type == RPCMessageType.SELL:
+            # message = self._format_sell_msg(msg)
+        # elif msg_type == RPCMessageType.SELL_FILL:
+            # message = ["\N{LARGE RED CIRCLE} <b>{exchange}:{uid}, #{trade_id}</b>"]
+            # message += ["<em>* Order SELL, {pair} filled</em>"]
+            # message += ["- Profit: {profit_amount:.4f} {stake_currency}"]
+            # message += ["- Amount: {amount}"]
+            # message += ["- Rate: {close_rate}"]
+            # message = '\n'.join(message).format(**msg)
 
         elif msg_type in (RPCMessageType.BUY_CANCEL, RPCMessageType.SELL_CANCEL):
             msg['side'] = 'BUY' if msg['type'] == RPCMessageType.BUY_CANCEL else 'SELL'
