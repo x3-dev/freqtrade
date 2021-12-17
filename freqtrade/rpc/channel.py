@@ -143,7 +143,7 @@ class Telegram(RPCHandler):
                 msg['stake_currency'],
                 msg['fiat_currency']
             )
-            msg['profit_extra'] = f"{msg['profit_amount']:.2f} {msg['stake_currency']} ({msg['profit_fiat']:.2f} {msg['fiat_currency'])}"
+            msg['profit_extra'] = f"{msg['profit_amount']:.2f} {msg['stake_currency']} ({msg['profit_fiat']:.2f} {msg['fiat_currency']})"
 
         message = [f"{msg['emoji']} <b>{msg['exchange']}:{msg['uid']}, #{msg['trade_id']}</b>"]
         message += [f"* <em>Order - SELL - {'filled' if is_fill else 'created'}, {msg['pair']}</em>"]
