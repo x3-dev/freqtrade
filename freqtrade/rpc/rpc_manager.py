@@ -44,7 +44,7 @@ class RPCManager:
         # Enable telegram channel
         if config.get('channel', {}).get('enabled', False):
             logger.info('Enabling rpc.telegram.channel ...')
-            from freqtrade.rpc._telegram import Telegram
+            from freqtrade.rpc.channel import Telegram
             self.registered_modules.append(Telegram(self._rpc, config))
 
     def cleanup(self) -> None:
