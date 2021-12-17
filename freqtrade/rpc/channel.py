@@ -98,7 +98,7 @@ class Telegram(RPCHandler):
 
 
     def _format_buy_msg(self, msg: dict) -> str:
-        msg['stake_amount_fiat'] = 0
+        msg['stake_amount_fiat'] = 0.0
         if self._rpc._fiat_converter:
             msg['stake_amount_fiat'] = self._rpc._fiat_converter.convert_amount(
                 msg['stake_amount'], msg['stake_currency'], msg['fiat_currency']
@@ -108,7 +108,7 @@ class Telegram(RPCHandler):
         msg['emoji'] = '\N{SPARKLE}' if is_fill else '\N{LARGE BLUE DIAMOND}'
 
         message = [f"{msg['emoji']} <b>{msg['exchange'].upper()}:{msg['uid']}, #{msg['trade_id']}</b>"]
-        message += [f"* <em>Order - BUY - is {'filled' if is_fill else 'created'}, {msg['pair']}</em>"]
+        message += [f"* <em>Order - BUY - {'filled' if is_fill else 'created'}, {msg['pair']}</em>"]
         if msg.get('buy_tag', None):
             message += [f"- Tag: {msg['buy_tag']}"]
         message += [f"- Amount: {msg['amount']:.4f}"]
@@ -121,7 +121,7 @@ class Telegram(RPCHandler):
 
         total = f"- Total: {round_coin_value(msg['stake_amount'], msg['stake_currency'])}"
         if msg.get('fiat_currency', None):
-            total += f" | {round_coin_value(msg['stake_amount_fiat'], msg['fiat_currency'])}"
+            total += f" ({round_coin_value(msg['stake_amount_fiat'], msg['fiat_currency'])})"
         message += [total]
         return '\n'.join(message)
 
@@ -143,17 +143,19 @@ class Telegram(RPCHandler):
                 msg['stake_currency'],
                 msg['fiat_currency']
             )
-            msg['profit_extra'] = ('{profit_amount:.4f} {stake_currency} / {profit_fiat:.2f} {fiat_currency}').format(**msg)
+            msg['profit_extra'] = f"{msg['profit_amount']:.2f} {msg['stake_currency']} ({msg['profit_fiat']:.2f} {msg['fiat_currency'])}"
 
         message = [f"{msg['emoji']} <b>{msg['exchange']}:{msg['uid']}, #{msg['trade_id']}</b>"]
-        message += [f"* <em>Order - SELL - is {'filled' if is_fill else 'created'}, {msg['pair']}</em>"]
-        message += [f"- {'Profit' if is_fill else 'Opportunity'}: {msg['profit_ratio']:.2f}%"]
+        message += [f"* <em>Order - SELL - {'filled' if is_fill else 'created'}, {msg['pair']}</em>"]
+
+        message += [f"- {'Profit, trade' if is_fill else 'Take-Profit, trade'}: {msg['profit_percent']}%"]
         if msg.get('profit_extra', None):
             message += [f"- {msg['gain'].capitalize()}: {msg['profit_extra']}"]
+
         message += [f"- BUY Tag: {msg['buy_tag']}"]
         if msg.get('exit_tag', None):
             message += [f"- SELL Tag: {msg['exit_tag']}"]
-        message += [f"- Reason: {msg['sell_reason'] and msg['sell_reason'].upper()}"]
+        message += [f"- Reason: {msg['sell_reason'] and msg['sell_reason'].upper().replace('_', ' ')}"]
         message += [f"- Duration: {msg['duration']} ({msg['duration_min']:.1f}m)"]
         message += [f"- Amount: {msg['amount']:.4f}"]
         message += [f"- Rate, open: {msg['open_rate']:.4f}"]
