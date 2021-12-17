@@ -107,7 +107,7 @@ class Telegram(RPCHandler):
         is_fill = bool(msg['type'] == RPCMessageType.BUY_FILL)
         msg['emoji'] = '\N{SPARKLE}' if is_fill else '\N{LARGE BLUE DIAMOND}'
 
-        message = [f"{msg['emoji']} <b>{msg['exchange'].upper()}:{msg['uid']}, #{msg['trade_id']}</b>"]
+        message = [f"{msg['emoji']} <b>{msg['exchange'].upper()}:::{msg['uid']}, #{msg['trade_id']}</b>"]
         message += [f"* <em>Order - BUY - {'filled' if is_fill else 'created'}, {msg['pair']}</em>"]
         if msg.get('buy_tag', None):
             message += [f"- Tag: {msg['buy_tag']}"]
@@ -145,7 +145,7 @@ class Telegram(RPCHandler):
             )
             msg['profit_extra'] = f"{msg['profit_amount']:.2f} {msg['stake_currency']} ({msg['profit_fiat']:.2f} {msg['fiat_currency']})"
 
-        message = [f"{msg['emoji']} <b>{msg['exchange']}:{msg['uid']}, #{msg['trade_id']}</b>"]
+        message = [f"{msg['emoji']} <b>{msg['exchange']}:::{msg['uid']}, #{msg['trade_id']}</b>"]
         message += [f"* <em>Order - SELL - {'filled' if is_fill else 'created'}, {msg['pair']}</em>"]
 
         message += [f"- {'Profit, trade' if is_fill else 'Take-Profit, trade'}: {msg['profit_percent']}%"]
