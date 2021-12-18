@@ -110,7 +110,7 @@ class Telegram(RPCHandler):
         message = [f"{msg['emoji']} <b>{msg['exchange'].upper()}:::{msg['uid']}, #{msg['trade_id']}</b>"]
         message += [f"* <em>Order - BUY - {'filled' if is_fill else 'created'}, {msg['pair']}</em>"]
         if msg.get('buy_tag', None):
-            message += [f"- Tag: {msg['buy_tag']}"]
+            message += [f"- BUY Tag: {msg['buy_tag']}"]
         message += [f"- Amount: {msg['amount']:.4f}"]
 
         if msg['type'] == RPCMessageType.BUY_FILL:
@@ -119,9 +119,9 @@ class Telegram(RPCHandler):
             message += [f"- Rate, open: {msg['limit']:.4f}"]
             message += [f"- Rate, current: {msg['current_rate']:.4f}"]
 
-        total = f"- Total: {round_coin_value(msg['stake_amount'], msg['stake_currency'])}"
+        total = f"- Total: {round_coin_value(msg['stake_amount'], msg['stake_currency']):.2f}"
         if msg.get('fiat_currency', None):
-            total += f" ({round_coin_value(msg['stake_amount_fiat'], msg['fiat_currency'])})"
+            total += f" ({round_coin_value(msg['stake_amount_fiat'], msg['fiat_currency']):.2f})"
         message += [total]
         return '\n'.join(message)
 
@@ -148,7 +148,7 @@ class Telegram(RPCHandler):
         message = [f"{msg['emoji']} <b>{msg['exchange']}:::{msg['uid']}, #{msg['trade_id']}</b>"]
         message += [f"* <em>Order - SELL - {'filled' if is_fill else 'created'}, {msg['pair']}</em>"]
 
-        message += [f"- {'Profit, trade' if is_fill else 'Take-Profit, trade'}: {msg['profit_percent']}%"]
+        message += [f"- {'Profit, trade' if is_fill else 'Profit, take'}: {msg['profit_percent']}%"]
         if msg.get('profit_extra', None):
             message += [f"- {msg['gain'].capitalize()}: {msg['profit_extra']}"]
 
@@ -166,85 +166,63 @@ class Telegram(RPCHandler):
 
         elif msg['type'] == RPCMessageType.SELL_FILL:
             message += [f"- Rate, close: {msg['limit']:.4f}"]
-
         return '\n'.join(message)
+
 
     def compose_message(self, msg: dict, msg_type: RPCMessageType) -> str:
         message = 'NONE'
         msg['uid'] = self._config.get('uid')
         msg['exchange'] = self._config.get('exchange').get('name').upper()
-        # for key, value in msg.items():
-            # if key in ['open_date', 'close_date']:
-                # msg[key] = value if isinstance(value, datetime) else datetime.strptime(value, '%Y-%m-%d %H:%M:%S.%f')
-            # if key in ['limit', 'amount', 'open_rate', 'close_rate', 'profit_amount', 'profit_ratio', 'stake_amount', 'current_rate']:
-                # if value and value not in (None, 'None', ''):
-                    # msg[key] = float(value) 
-                # else:
-                    # msg[key] = 0.0
 
         if msg_type in [RPCMessageType.BUY, RPCMessageType.BUY_FILL]:
             message = self._format_buy_msg(msg)
 
-        # if msg_type == RPCMessageType.BUY:
-            # message = self._format_buy_msg(msg)
-
-        # elif msg_type == RPCMessageType.BUY_FILL:
-            # message = ["\N{LARGE BLUE CIRCLE} <b>{exchange}:{uid}, #{trade_id}</b>"]
-            # message += ["<em>* Order BUY, {pair} filled</em>"]
-            # message += ["- Amount: {amount}"]
-            # message += ["- Rate: {open_rate}"]
-            # message = '\n'.join(message).format(**msg)
-
         elif msg_type in [RPCMessageType.SELL, RPCMessageType.SELL_FILL]:
             message = self._format_sell_msg(msg)
 
-        # elif msg_type == RPCMessageType.SELL:
-            # message = self._format_sell_msg(msg)
-        # elif msg_type == RPCMessageType.SELL_FILL:
-            # message = ["\N{LARGE RED CIRCLE} <b>{exchange}:{uid}, #{trade_id}</b>"]
-            # message += ["<em>* Order SELL, {pair} filled</em>"]
-            # message += ["- Profit: {profit_amount:.4f} {stake_currency}"]
-            # message += ["- Amount: {amount}"]
-            # message += ["- Rate: {close_rate}"]
-            # message = '\n'.join(message).format(**msg)
-
         elif msg_type in (RPCMessageType.BUY_CANCEL, RPCMessageType.SELL_CANCEL):
+            emoji = '\N{ANGER SYMBOL}'
             msg['side'] = 'BUY' if msg['type'] == RPCMessageType.BUY_CANCEL else 'SELL'
-            message = ["\N{WARNING SIGN} <b>{exchange}:{uid}, #{trade_id}</b>"]
-            message += ["<em>* Order {side}, {pair}, canceled</em>"]
-            message += ["- Reason: {reason}"]
-            message = '\n'.join(message).format(**msg)
+            message = [f"{emoji} <b>{msg['exchange']}:::{msg['uid']}, #{msg['trade_id']}</b>"]
+            message += [f"<em>* Order - {msg['side']} - {msg['pair']}, canceled</em>"]
+            message += [f"- Reason: {msg['reason']}"]
+            message = '\n'.join(message)
 
         elif msg_type == RPCMessageType.PROTECTION_TRIGGER:
-            message = "*Protection* triggered due to {reason}. `{pair}` will be locked until `{lock_end_time}`".format(**msg)
+            emoji = '\N{CURLY LOOP}'
+            message = f"{emoji} - Protection triggered due to {msg['reason']}. {msg['pair']} will be locked until {msg['lock_end_time']}"
 
         elif msg_type == RPCMessageType.PROTECTION_TRIGGER_GLOBAL:
-            message = "*Protection* triggered due to {reason}. *All pairs* will be locked until `{lock_end_time}`".format(**msg)
+            emoji = '\N{CURLY LOOP}'
+            message = f"{emoji} - Protection triggered due to {msg['reason']}. ALL PAIRS will be locked until {msg['lock_end_time']}"
 
         elif msg_type == RPCMessageType.STATUS:
-            message = ['\N{GEAR} <b>{exchange}:{uid}</b>']
-            # message += ['- Type: {type}']
-            message += ['- Status: {status}']
-            message = '\n'.join(message).format(**msg)
+            emoji = '\N{GEAR}'
+            message = [f"{emoji} - <b>{msg['exchange']}:::{msg['uid']}</b> -"]
+            message += [f"- Status: {msg['status']}"]
+            message = '\n'.join(message)
 
         elif msg_type == RPCMessageType.WARNING:
-            message = '\N{WARNING SIGN} <b>{exchange}:{uid}</b>\n* Warning: {type} {status}'.format(**msg)
+            emoji = '\N{WARNING SIGN}'
+            message = f"{emoji} - <b>{msg['exchange']}:::{msg['uid']}</b> -\n- Warning: {msg['type']} / {msg['status']}"
 
         elif msg_type == RPCMessageType.STARTUP:
-            message = '<b>{exchange}:{uid}</b>\n- Type: {type}\n* <em>{status}</em>'.format(**msg)
+            emoji = '\N{GEAR}'
+            message = f"{emoji} - <b>{msg['exchange']}:::{msg['uid']}</b> -\n- Type: {msg['type']}\n- <em>{msg['status']}</em> -"
 
         else:
-            raise Warning(f"{msg.get('exchange', None)}:{msg.get('uid', None)} Unknown message type: {msg_type}")
+            raise Warning(f"{msg.get('exchange', None)}:::{msg.get('uid', None)} Unknown message type: {msg_type}")
 
         # logger.info(f"Proccessing to message type {msg_type} | body: {msg}")
         return message
+
 
     def _get_sell_emoji(self, msg: dict) -> str:
         if float(msg['profit_percent']) >= 5.0:
             return "\N{ROCKET}"
         elif float(msg['profit_percent']) >= 0.0:
-            return "\N{EIGHT SPOKED ASTERISK}"
+            return "\N{CURRENCY EXCHANGE}"
         elif msg['sell_reason'] == "stoploss":
-            return"\N{WARNING SIGN}"
+            return "\N{WARNING SIGN}"
         else:
             return "\N{CROSS MARK}"
