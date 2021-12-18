@@ -119,9 +119,9 @@ class Telegram(RPCHandler):
             message += [f"- Rate, open: {msg['limit']:.4f}"]
             message += [f"- Rate, current: {msg['current_rate']:.4f}"]
 
-        total = f"- Total: {round_coin_value(msg['stake_amount'], msg['stake_currency']):.2f}"
+        total = f"- Total: {round_coin_value(msg['stake_amount'], msg['stake_currency'])}"
         if msg.get('fiat_currency', None):
-            total += f" ({round_coin_value(msg['stake_amount_fiat'], msg['fiat_currency']):.2f})"
+            total += f" ({round_coin_value(msg['stake_amount_fiat'], msg['fiat_currency'])})"
         message += [total]
         return '\n'.join(message)
 
