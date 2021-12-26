@@ -6,6 +6,7 @@ from freqtrade.exchange.exchange import Exchange
 from freqtrade.exchange.ascendex import Ascendex
 from freqtrade.exchange.bibox import Bibox
 from freqtrade.exchange.binance import Binance
+from freqtrade.exchange.bitpanda import Bitpanda
 from freqtrade.exchange.bittrex import Bittrex
 from freqtrade.exchange.bybit import Bybit
 from freqtrade.exchange.coinbasepro import Coinbasepro
