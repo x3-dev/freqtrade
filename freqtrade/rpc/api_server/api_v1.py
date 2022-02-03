@@ -14,7 +14,7 @@ from freqtrade.rpc import RPC
 from freqtrade.rpc.api_server.api_schemas import (AvailablePairs, Balances, BlacklistPayload,
                                                   BlacklistResponse, ChangeConfigPayload, ChangeConfigStatus,
                                                   Count, Daily, DeleteLockRequest, DeleteTrade, ForceBuyPayload,
-                                                  ForceBuyResponse, ForceSellPayload, Locks, Logs,
+                                                  ForceBuyResponse, ForceSellPayload, Health, Locks, Logs,
                                                   OpenTradeSchema, PairHistory, PerformanceEntry,
                                                   Ping, PlotConfig, Profit, ResultMsg, ShowConfig,
                                                   Stats, StatusMsg, StrategyListResponse,
@@ -219,7 +219,8 @@ def reload_config(rpc: RPC = Depends(get_rpc)):
 
 
 @router.get('/pair_candles', response_model=PairHistory, tags=['candle data'])
-def pair_candles(pair: str, timeframe: str, limit: Optional[int], rpc: RPC = Depends(get_rpc)):
+def pair_candles(
+        pair: str, timeframe: str, limit: Optional[int] = None, rpc: RPC = Depends(get_rpc)):
     return rpc._rpc_analysed_dataframe(pair, timeframe, limit)
 
 
@@ -295,3 +296,8 @@ def list_available_pairs(timeframe: Optional[str] = None, stake_currency: Option
 @router.get('/sysinfo', response_model=SysInfo, tags=['info'])
 def sysinfo():
     return RPC._rpc_sysinfo()
+
+
+@router.get('/health', response_model=Health, tags=['info'])
+def health(rpc: RPC = Depends(get_rpc)):
+    return rpc._health()

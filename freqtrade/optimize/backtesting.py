@@ -275,15 +275,19 @@ class Backtesting:
             # Trim startup period from analyzed dataframe
             df_analyzed = processed[pair] = pair_data = trim_dataframe(
                 df_analyzed, self.timerange, startup_candles=self.required_startup)
+            # Update dataprovider cache
+            self.dataprovider._set_cached_df(pair, self.timeframe, df_analyzed)
+
+            # Create a copy of the dataframe before shifting, that way the buy signal/tag
+            # remains on the correct candle for callbacks.
+            df_analyzed = df_analyzed.copy()
+
             # To avoid using data from future, we use buy/sell signals shifted
             # from the previous candle
             df_analyzed.loc[:, 'buy'] = df_analyzed.loc[:, 'buy'].shift(1)
             df_analyzed.loc[:, 'sell'] = df_analyzed.loc[:, 'sell'].shift(1)
             df_analyzed.loc[:, 'buy_tag'] = df_analyzed.loc[:, 'buy_tag'].shift(1)
             df_analyzed.loc[:, 'exit_tag'] = df_analyzed.loc[:, 'exit_tag'].shift(1)
-
-            # Update dataprovider cache
-            self.dataprovider._set_cached_df(pair, self.timeframe, df_analyzed)
 
             df_analyzed = df_analyzed.drop(df_analyzed.head(1).index)
 
@@ -381,7 +385,12 @@ class Backtesting:
 
         # Check if we need to adjust our current positions
         if self.strategy.position_adjustment_enable:
-            trade = self._get_adjust_trade_entry_for_candle(trade, sell_row)
+            check_adjust_buy = True
+            if self.strategy.max_entry_position_adjustment > -1:
+                count_of_buys = trade.nr_of_successful_buys
+                check_adjust_buy = (count_of_buys <= self.strategy.max_entry_position_adjustment)
+            if check_adjust_buy:
+                trade = self._get_adjust_trade_entry_for_candle(trade, sell_row)
 
         sell_candle_time = sell_row[DATE_IDX].to_pydatetime()
         sell = self.strategy.should_sell(trade, sell_row[OPEN_IDX],  # type: ignore
