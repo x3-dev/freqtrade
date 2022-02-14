@@ -1,8 +1,8 @@
 numpy==1.22.2
-pandas==1.4.0
+pandas==1.4.1
 pandas-ta==0.3.14b
 
-ccxt==1.72.36
+ccxt==1.72.98
 # Pin cryptography for now due to rust build errors with piwheels
 cryptography==36.0.1
 aiohttp==3.8.1
@@ -41,6 +41,6 @@ psutil==5.9.0
 colorama==0.4.4
 # Building config files interactively
 questionary==1.10.0
-prompt-toolkit==3.0.26
+prompt-toolkit==3.0.28
 # Extensions to datetime library
 python-dateutil==2.8.2

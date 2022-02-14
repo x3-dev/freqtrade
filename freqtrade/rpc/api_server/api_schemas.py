@@ -119,7 +119,7 @@ class SellReason(BaseModel):
 
 class Stats(BaseModel):
     sell_reasons: Dict[str, SellReason]
-    durations: Dict[str, Union[str, float]]
+    durations: Dict[str, Optional[float]]
 
 
 class DailyRecord(BaseModel):
@@ -291,6 +291,7 @@ class ForceBuyPayload(BaseModel):
     price: Optional[float]
     ordertype: Optional[OrderTypeValues]
     stakeamount: Optional[float]
+    entry_tag: Optional[str]
 
 
 class ForceSellPayload(BaseModel):
