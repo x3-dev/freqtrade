@@ -159,7 +159,7 @@ class ShowConfig(BaseModel):
     api_version: float
     dry_run: bool
     stake_currency: str
-    stake_amount: Union[float, str]
+    stake_amount: str
     available_capital: Optional[float]
     sell_profit_offset: Optional[float]
     stake_currency_decimals: int
@@ -377,7 +377,7 @@ class BacktestRequest(BaseModel):
     timeframe_detail: Optional[str]
     timerange: Optional[str]
     max_open_trades: Optional[int]
-    stake_amount: Optional[Union[float, str]]
+    stake_amount: Optional[str]
     enable_protections: bool
     dry_run_wallet: Optional[float]
 

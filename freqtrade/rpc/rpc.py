@@ -143,8 +143,8 @@ class RPC:
             'strategy_version': strategy_version,
             'dry_run': config['dry_run'],
             'stake_currency': config['stake_currency'],
-            'stake_currency_decimals':  decimals_per_coin(config['stake_currency']),
-            'stake_amount': config.get('stake_amount', 0.0),
+            'stake_currency_decimals': decimals_per_coin(config['stake_currency']),
+            'stake_amount': str(config['stake_amount']),
             'available_capital': config.get('available_capital'),
             'sell_profit_offset': config.get('sell_profit_offset', 0.0),
             'max_open_trades': (config['max_open_trades']
