@@ -119,7 +119,7 @@ def init_db(config: Dict) -> None:
     previous_tables = inspect(engine).get_table_names()
     _DECL_BASE.metadata.create_all(engine)
     # TimescaleDb need CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
-    event.listen(Order.__table__, 'after_create', DDL(f"SELECT create_hypertable('{Order.__tablename__}', 'order_date');"))
+    # event.listen(Order.__table__, 'after_create', DDL(f"SELECT create_hypertable('{Order.__tablename__}', 'order_date');"))
     check_migrate(engine, decl_base=_DECL_BASE, previous_tables=previous_tables)
 
 
