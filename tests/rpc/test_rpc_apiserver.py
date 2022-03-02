@@ -902,6 +902,8 @@ def test_api_status(botclient, mocker, ticker, fee, markets):
         'buy_tag': None,
         'timeframe': 5,
         'exchange': 'binance',
+        'orders': [ANY],
+
     }
 
     mocker.patch('freqtrade.exchange.Exchange.get_rate',
@@ -1089,6 +1091,7 @@ def test_api_forcebuy(botclient, mocker, fee):
         'buy_tag': None,
         'timeframe': 5,
         'exchange': 'binance',
+        'orders': [],
     }
 
 
@@ -1108,6 +1111,7 @@ def test_api_forcesell(botclient, mocker, ticker, fee, markets):
                      data='{"tradeid": "1"}')
     assert_response(rc, 502)
     assert rc.json() == {"error": "Error querying /api/v1/forcesell: invalid argument"}
+    Trade.query.session.rollback()
 
     ftbot.enter_positions()
 
@@ -1349,6 +1353,11 @@ def test_api_backtesting(botclient, mocker, fee, caplog, tmpdir):
     ftbot, client = botclient
     mocker.patch('freqtrade.exchange.Exchange.get_fee', fee)
 
+    rc = client_get(client, f"{BASE_URI}/backtest")
+    # Backtest prevented in default mode
+    assert_response(rc, 502)
+
+    ftbot.config['runmode'] = RunMode.WEBSERVER
     # Backtesting not started yet
     rc = client_get(client, f"{BASE_URI}/backtest")
     assert_response(rc)
