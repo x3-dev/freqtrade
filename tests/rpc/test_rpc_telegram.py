@@ -203,7 +203,7 @@ def test_telegram_status(default_conf, update, mocker) -> None:
             'stop_loss_ratio': -0.0001,
             'open_order': '(limit buy rem=0.00000000)',
             'is_open': True,
-            'filled_entry_orders': []
+            'orders': []
         }]),
     )
 
@@ -236,6 +236,8 @@ def test_telegram_status_multi_entry(default_conf, update, mocker, fee) -> None:
     create_mock_trades(fee)
     trades = Trade.get_open_trades()
     trade = trades[0]
+    # Average may be empty on some exchanges
+    trade.orders[0].average = 0
     trade.orders.append(Order(
         order_id='5412vbb',
         ft_order_side='buy',
@@ -246,7 +248,7 @@ def test_telegram_status_multi_entry(default_conf, update, mocker, fee) -> None:
         order_type="market",
         side="buy",
         price=trade.open_rate * 0.95,
-        average=trade.open_rate * 0.95,
+        average=0,
         filled=trade.amount,
         remaining=0,
         cost=trade.amount,
@@ -418,10 +420,12 @@ def test_daily_handle(default_conf, update, ticker, limit_buy_order, fee,
     assert trade
 
     # Simulate fulfilled LIMIT_BUY order for trade
-    trade.update(limit_buy_order)
+    oobj = Order.parse_from_ccxt_object(limit_buy_order, limit_buy_order['symbol'], 'buy')
+    trade.update_trade(oobj)
 
     # Simulate fulfilled LIMIT_SELL order for trade
-    trade.update(limit_sell_order)
+    oobjs = Order.parse_from_ccxt_object(limit_sell_order, limit_sell_order['symbol'], 'sell')
+    trade.update_trade(oobjs)
 
     trade.close_date = datetime.utcnow()
     trade.is_open = False
@@ -461,8 +465,8 @@ def test_daily_handle(default_conf, update, ticker, limit_buy_order, fee,
 
     trades = Trade.query.all()
     for trade in trades:
-        trade.update(limit_buy_order)
-        trade.update(limit_sell_order)
+        trade.update_trade(oobj)
+        trade.update_trade(oobjs)
         trade.close_date = datetime.utcnow()
         trade.is_open = False
 
@@ -527,10 +531,12 @@ def test_weekly_handle(default_conf, update, ticker, limit_buy_order, fee,
     assert trade
 
     # Simulate fulfilled LIMIT_BUY order for trade
-    trade.update(limit_buy_order)
+    oobj = Order.parse_from_ccxt_object(limit_buy_order, limit_buy_order['symbol'], 'buy')
+    trade.update_trade(oobj)
 
     # Simulate fulfilled LIMIT_SELL order for trade
-    trade.update(limit_sell_order)
+    oobjs = Order.parse_from_ccxt_object(limit_sell_order, limit_sell_order['symbol'], 'sell')
+    trade.update_trade(oobjs)
 
     trade.close_date = datetime.utcnow()
     trade.is_open = False
@@ -574,8 +580,8 @@ def test_weekly_handle(default_conf, update, ticker, limit_buy_order, fee,
 
     trades = Trade.query.all()
     for trade in trades:
-        trade.update(limit_buy_order)
-        trade.update(limit_sell_order)
+        trade.update_trade(oobj)
+        trade.update_trade(oobjs)
         trade.close_date = datetime.utcnow()
         trade.is_open = False
 
@@ -643,10 +649,12 @@ def test_monthly_handle(default_conf, update, ticker, limit_buy_order, fee,
     assert trade
 
     # Simulate fulfilled LIMIT_BUY order for trade
-    trade.update(limit_buy_order)
+    oobj = Order.parse_from_ccxt_object(limit_buy_order, limit_buy_order['symbol'], 'buy')
+    trade.update_trade(oobj)
 
     # Simulate fulfilled LIMIT_SELL order for trade
-    trade.update(limit_sell_order)
+    oobjs = Order.parse_from_ccxt_object(limit_sell_order, limit_sell_order['symbol'], 'sell')
+    trade.update_trade(oobjs)
 
     trade.close_date = datetime.utcnow()
     trade.is_open = False
@@ -690,8 +698,8 @@ def test_monthly_handle(default_conf, update, ticker, limit_buy_order, fee,
 
     trades = Trade.query.all()
     for trade in trades:
-        trade.update(limit_buy_order)
-        trade.update(limit_sell_order)
+        trade.update_trade(oobj)
+        trade.update_trade(oobjs)
         trade.close_date = datetime.utcnow()
         trade.is_open = False
 
@@ -761,7 +769,9 @@ def test_profit_handle(default_conf, update, ticker, ticker_sell_up, fee,
     trade = Trade.query.first()
 
     # Simulate fulfilled LIMIT_BUY order for trade
-    trade.update(limit_buy_order)
+    oobj = Order.parse_from_ccxt_object(limit_buy_order, limit_buy_order['symbol'], 'buy')
+    trade.update_trade(oobj)
+
     context = MagicMock()
     # Test with invalid 2nd argument (should silently pass)
     context.args = ["aaa"]
@@ -776,7 +786,9 @@ def test_profit_handle(default_conf, update, ticker, ticker_sell_up, fee,
 
     # Update the ticker with a market going up
     mocker.patch('freqtrade.exchange.Exchange.fetch_ticker', ticker_sell_up)
-    trade.update(limit_sell_order)
+    # Simulate fulfilled LIMIT_SELL order for trade
+    oobj = Order.parse_from_ccxt_object(limit_sell_order, limit_sell_order['symbol'], 'sell')
+    trade.update_trade(oobj)
 
     trade.close_date = datetime.now(timezone.utc)
     trade.is_open = False
@@ -861,7 +873,7 @@ def test_balance_handle_empty_response(default_conf, update, mocker) -> None:
     telegram._balance(update=update, context=MagicMock())
     result = msg_mock.call_args_list[0][0][0]
     assert msg_mock.call_count == 1
-    assert 'All balances are zero.' in result
+    assert 'Starting capital: `0 BTC' in result
 
 
 def test_balance_handle_empty_response_dry(default_conf, update, mocker) -> None:
@@ -1286,10 +1298,12 @@ def test_telegram_performance_handle(default_conf, update, ticker, fee,
     assert trade
 
     # Simulate fulfilled LIMIT_BUY order for trade
-    trade.update(limit_buy_order)
+    oobj = Order.parse_from_ccxt_object(limit_buy_order, limit_buy_order['symbol'], 'buy')
+    trade.update_trade(oobj)
 
     # Simulate fulfilled LIMIT_SELL order for trade
-    trade.update(limit_sell_order)
+    oobj = Order.parse_from_ccxt_object(limit_sell_order, limit_sell_order['symbol'], 'sell')
+    trade.update_trade(oobj)
 
     trade.close_date = datetime.utcnow()
     trade.is_open = False
@@ -1313,13 +1327,15 @@ def test_telegram_buy_tag_performance_handle(default_conf, update, ticker, fee,
     freqtradebot.enter_positions()
     trade = Trade.query.first()
     assert trade
+    trade.buy_tag = "TESTBUY"
 
     # Simulate fulfilled LIMIT_BUY order for trade
-    trade.update(limit_buy_order)
+    oobj = Order.parse_from_ccxt_object(limit_buy_order, limit_buy_order['symbol'], 'buy')
+    trade.update_trade(oobj)
 
-    trade.buy_tag = "TESTBUY"
     # Simulate fulfilled LIMIT_SELL order for trade
-    trade.update(limit_sell_order)
+    oobj = Order.parse_from_ccxt_object(limit_sell_order, limit_sell_order['symbol'], 'sell')
+    trade.update_trade(oobj)
 
     trade.close_date = datetime.utcnow()
     trade.is_open = False
@@ -1356,13 +1372,14 @@ def test_telegram_sell_reason_performance_handle(default_conf, update, ticker, f
     freqtradebot.enter_positions()
     trade = Trade.query.first()
     assert trade
-
-    # Simulate fulfilled LIMIT_BUY order for trade
-    trade.update(limit_buy_order)
-
     trade.sell_reason = 'TESTSELL'
+    # Simulate fulfilled LIMIT_BUY order for trade
+    oobj = Order.parse_from_ccxt_object(limit_buy_order, limit_buy_order['symbol'], 'buy')
+    trade.update_trade(oobj)
+
     # Simulate fulfilled LIMIT_SELL order for trade
-    trade.update(limit_sell_order)
+    oobj = Order.parse_from_ccxt_object(limit_sell_order, limit_sell_order['symbol'], 'sell')
+    trade.update_trade(oobj)
 
     trade.close_date = datetime.utcnow()
     trade.is_open = False
@@ -1399,15 +1416,16 @@ def test_telegram_mix_tag_performance_handle(default_conf, update, ticker, fee,
     freqtradebot.enter_positions()
     trade = Trade.query.first()
     assert trade
-
-    # Simulate fulfilled LIMIT_BUY order for trade
-    trade.update(limit_buy_order)
-
     trade.buy_tag = "TESTBUY"
     trade.sell_reason = "TESTSELL"
 
+    # Simulate fulfilled LIMIT_BUY order for trade
+    oobj = Order.parse_from_ccxt_object(limit_buy_order, limit_buy_order['symbol'], 'buy')
+    trade.update_trade(oobj)
+
     # Simulate fulfilled LIMIT_SELL order for trade
-    trade.update(limit_sell_order)
+    oobj = Order.parse_from_ccxt_object(limit_sell_order, limit_sell_order['symbol'], 'sell')
+    trade.update_trade(oobj)
 
     trade.close_date = datetime.utcnow()
     trade.is_open = False
