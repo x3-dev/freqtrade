@@ -389,6 +389,7 @@ class LocalTrade():
 
     # Futures properties
     funding_fees: Optional[float] = None
+<<<<<<< HEAD
 
     @property
     def buy_tag(self) -> Optional[str]:
@@ -399,6 +400,18 @@ class LocalTrade():
         return self.enter_tag
 
     @property
+=======
+
+    @property
+    def buy_tag(self) -> Optional[str]:
+        """
+        Compatibility between buy_tag (old) and enter_tag (new)
+        Consider buy_tag deprecated
+        """
+        return self.enter_tag
+
+    @property
+>>>>>>> 33841da382a3b8071fdfec407573b3700f28e010
     def has_no_leverage(self) -> bool:
         """Returns true if this is a non-leverage, non-short trade"""
         return ((self.leverage == 1.0 or self.leverage is None) and not self.is_short)

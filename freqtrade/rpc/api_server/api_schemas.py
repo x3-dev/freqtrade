@@ -7,11 +7,6 @@ from freqtrade.constants import DATETIME_PRINT_FORMAT
 from freqtrade.enums import OrderTypeValues, SignalDirection, TradingMode
 
 
-class ChangeConfigPayload(BaseModel):
-    key: str
-    val: Optional[str]
-
-
 class ChangeConfigStatus(BaseModel):
     status: str
     msg: str
@@ -438,3 +433,7 @@ class SysInfo(BaseModel):
 class Health(BaseModel):
     last_process: datetime
     last_process_ts: int
+
+class ChangeConfigPayload(BaseModel):
+    key: str
+    val: Optional[str]
