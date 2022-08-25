@@ -31,6 +31,8 @@ from freqtrade.plugins.pairlist.pairlist_helpers import expand_pairlist
 from freqtrade.rpc.fiat_convert import CryptoToFiatConverter
 from freqtrade.wallets import PositionWallet, Wallet
 
+import nested_lookup
+import ast
 
 logger = logging.getLogger(__name__)
 
@@ -146,7 +148,8 @@ class RPC:
             'max_entry_position_adjustment': (
                 config.get('max_entry_position_adjustment', -1)
                 if config.get('max_entry_position_adjustment') != float('inf')
-                else -1)
+                else -1),
+            'sell_profit_offset': config.get('sell_profit_offset', 0.0),
         }
         return val
 
@@ -1089,3 +1092,32 @@ class RPC:
             'last_process_loc': last_p.astimezone(tzlocal()).strftime(DATETIME_PRINT_FORMAT),
             'last_process_ts': int(last_p.timestamp()),
         }
+
+    def _rpc_change_config(self, key: str, val: Any) -> Dict[str, Any]:
+        """
+        Handler to change configuration variables at runtime
+        """
+        if self._freqtrade.state == State.RUNNING:
+            if key in nested_lookup.get_all_keys(self._freqtrade.config):
+                msg = f'Changed {key} with {val} for bot configuration.'
+                try:
+                    value = ast.literal_eval(val)
+                except Exception as err:
+                    # Cache error and pass value as string
+                    logger.info('Passed origin value to configuration', err)
+                    msg += 'Passed origin value to configuration'
+                    value = val
+                try:
+                    self._freqtrade.config.update(
+                        nested_lookup.nested_update(
+                            self._freqtrade.config,
+                            key=key,
+                            value=value
+                        )
+                    )
+                except Exception as err:
+                    return {'status': 'error', 'msg': f'Error updating {key} with {val} for bot configuration. Traceback: {err}'}
+                finally:
+                    return {'status': 'ok', 'msg': msg}
+            return {'status': 'error', 'msg': f'Not able to change {key} with {val} for bot configuration. Maybe wrong key?'}
+        return {'status': 'error', 'msg': 'Instance is not running'}

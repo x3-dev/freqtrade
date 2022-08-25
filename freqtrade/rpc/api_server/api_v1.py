@@ -24,6 +24,7 @@ from freqtrade.rpc.api_server.api_schemas import (AvailablePairs, Balances, Blac
 from freqtrade.rpc.api_server.deps import get_config, get_exchange, get_rpc, get_rpc_optional
 from freqtrade.rpc.rpc import RPCException
 
+from freqtrade.rpc.api_server.api_schemas import ChangeConfigStatus, ChangeConfigPayload
 
 logger = logging.getLogger(__name__)
 
@@ -316,3 +317,8 @@ def sysinfo():
 @router.get('/health', response_model=Health, tags=['info'])
 def health(rpc: RPC = Depends(get_rpc)):
     return rpc._health()
+
+
+@router.post('/change_config', response_model=ChangeConfigStatus, tags=['botcontrol'])
+def change_config(payload: ChangeConfigPayload, rpc: RPC = Depends(get_rpc)):
+    return rpc._rpc_change_config(payload.key, payload.val)
