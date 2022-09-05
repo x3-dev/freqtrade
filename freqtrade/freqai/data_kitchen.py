@@ -454,7 +454,8 @@ class FreqaiDataKitchen:
         start = datetime.datetime.fromtimestamp(timerange.startts, tz=datetime.timezone.utc)
         stop = datetime.datetime.fromtimestamp(timerange.stopts, tz=datetime.timezone.utc)
         df = df.loc[df["date"] >= start, :]
-        df = df.loc[df["date"] <= stop, :]
+        if not self.live:
+            df = df.loc[df["date"] < stop, :]
 
         return df
 
