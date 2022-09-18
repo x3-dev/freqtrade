@@ -506,7 +506,7 @@ def test_create_trades_multiple_trades(
 
 
 def test_create_trades_preopen(default_conf_usdt, ticker_usdt, fee, mocker,
-                               limit_buy_order_usdt_open) -> None:
+                               limit_buy_order_usdt_open, caplog) -> None:
     patch_RPCManager(mocker)
     patch_exchange(mocker)
     default_conf_usdt['max_open_trades'] = 4
@@ -515,6 +515,7 @@ def test_create_trades_preopen(default_conf_usdt, ticker_usdt, fee, mocker,
         fetch_ticker=ticker_usdt,
         create_order=MagicMock(return_value=limit_buy_order_usdt_open),
         get_fee=fee,
+        get_funding_fees=MagicMock(side_effect=ExchangeError()),
     )
     freqtrade = FreqtradeBot(default_conf_usdt)
     patch_get_signal(freqtrade)
@@ -522,6 +523,7 @@ def test_create_trades_preopen(default_conf_usdt, ticker_usdt, fee, mocker,
     # Create 2 existing trades
     freqtrade.execute_entry('ETH/USDT', default_conf_usdt['stake_amount'])
     freqtrade.execute_entry('NEO/BTC', default_conf_usdt['stake_amount'])
+    assert log_has("Could not find funding fee.", caplog)
 
     assert len(Trade.get_open_trades()) == 2
     # Change order_id for new orders
@@ -1425,6 +1427,7 @@ def test_handle_stoploss_on_exchange_trailing(
     trade.is_open = True
     trade.open_order_id = None
     trade.stoploss_order_id = 100
+    trade.stoploss_last_update = arrow.utcnow().shift(minutes=-20).datetime
 
     stoploss_order_hanging = MagicMock(return_value={
         'id': 100,
@@ -1454,7 +1457,7 @@ def test_handle_stoploss_on_exchange_trailing(
     )
 
     cancel_order_mock = MagicMock()
-    stoploss_order_mock = MagicMock(return_value={'id': 13434334})
+    stoploss_order_mock = MagicMock(return_value={'id': 'so1'})
     mocker.patch('freqtrade.exchange.Binance.cancel_stoploss_order', cancel_order_mock)
     mocker.patch('freqtrade.exchange.Binance.stoploss', stoploss_order_mock)
 
@@ -1567,6 +1570,7 @@ def test_handle_stoploss_on_exchange_trailing_error(
     assert stoploss.call_count == 1
 
     # Fail creating stoploss order
+    trade.stoploss_last_update = arrow.utcnow().shift(minutes=-601).datetime
     caplog.clear()
     cancel_mock = mocker.patch("freqtrade.exchange.Binance.cancel_stoploss_order", MagicMock())
     mocker.patch("freqtrade.exchange.Binance.stoploss", side_effect=ExchangeError())
@@ -1655,6 +1659,7 @@ def test_handle_stoploss_on_exchange_custom_stop(
     trade.is_open = True
     trade.open_order_id = None
     trade.stoploss_order_id = 100
+    trade.stoploss_last_update = arrow.utcnow().shift(minutes=-601).datetime
 
     stoploss_order_hanging = MagicMock(return_value={
         'id': 100,
@@ -1683,7 +1688,7 @@ def test_handle_stoploss_on_exchange_custom_stop(
     )
 
     cancel_order_mock = MagicMock()
-    stoploss_order_mock = MagicMock(return_value={'id': 13434334})
+    stoploss_order_mock = MagicMock(return_value={'id': 'so1'})
     mocker.patch('freqtrade.exchange.Binance.cancel_stoploss_order', cancel_order_mock)
     mocker.patch('freqtrade.exchange.Binance.stoploss', stoploss_order_mock)
 
@@ -1725,8 +1730,7 @@ def test_handle_stoploss_on_exchange_custom_stop(
     assert freqtrade.handle_trade(trade) is True
 
 
-def test_tsl_on_exchange_compatible_with_edge(mocker, edge_conf, fee, caplog,
-                                              limit_order) -> None:
+def test_tsl_on_exchange_compatible_with_edge(mocker, edge_conf, fee, limit_order) -> None:
 
     enter_order = limit_order['buy']
     exit_order = limit_order['sell']
@@ -1782,6 +1786,7 @@ def test_tsl_on_exchange_compatible_with_edge(mocker, edge_conf, fee, caplog,
     trade.is_open = True
     trade.open_order_id = None
     trade.stoploss_order_id = 100
+    trade.stoploss_last_update = arrow.utcnow()
 
     stoploss_order_hanging = MagicMock(return_value={
         'id': 100,
@@ -3655,6 +3660,7 @@ def test_may_execute_trade_exit_after_stoploss_on_exchange_hit(
     assert trade.exit_reason == ExitType.STOPLOSS_ON_EXCHANGE.value
     assert rpc_mock.call_count == 3
     assert rpc_mock.call_args_list[0][0][0]['type'] == RPCMessageType.ENTRY
+    assert rpc_mock.call_args_list[0][0][0]['amount'] > 20
     assert rpc_mock.call_args_list[1][0][0]['type'] == RPCMessageType.ENTRY_FILL
     assert rpc_mock.call_args_list[2][0][0]['type'] == RPCMessageType.EXIT_FILL
 
@@ -3665,7 +3671,7 @@ def test_may_execute_trade_exit_after_stoploss_on_exchange_hit(
         (True, 29.70297029, 2.2, 2.3, -8.63762376, -0.1443212, 'loss'),
     ])
 def test_execute_trade_exit_market_order(
-    default_conf_usdt, ticker_usdt, fee, is_short, current_rate, amount,
+    default_conf_usdt, ticker_usdt, fee, is_short, current_rate, amount, caplog,
     limit, profit_amount, profit_ratio, profit_or_loss, ticker_usdt_sell_up, mocker
 ) -> None:
     """
@@ -3693,6 +3699,7 @@ def test_execute_trade_exit_market_order(
         fetch_ticker=ticker_usdt,
         get_fee=fee,
         _is_dry_limit_order_filled=MagicMock(return_value=True),
+        get_funding_fees=MagicMock(side_effect=ExchangeError()),
     )
     patch_whitelist(mocker, default_conf_usdt)
     freqtrade = FreqtradeBot(default_conf_usdt)
@@ -3718,6 +3725,7 @@ def test_execute_trade_exit_market_order(
         limit=ticker_usdt_sell_up()['ask' if is_short else 'bid'],
         exit_check=ExitCheckTuple(exit_type=ExitType.ROI)
     )
+    assert log_has("Could not update funding fee.", caplog)
 
     assert not trade.is_open
     assert pytest.approx(trade.close_profit) == profit_ratio
@@ -5427,6 +5435,16 @@ def test_update_funding_fees(
             funding_rates[trade.pair].iloc[1:2]['open'] *
             multipl
         ))
+
+
+def test_update_funding_fees_error(mocker, default_conf, caplog):
+    mocker.patch('freqtrade.exchange.Exchange.get_funding_fees', side_effect=ExchangeError())
+    default_conf['trading_mode'] = 'futures'
+    default_conf['margin_mode'] = 'isolated'
+    freqtrade = get_patched_freqtradebot(mocker, default_conf)
+    freqtrade.update_funding_fees()
+
+    log_has("Could not update funding fees for open trades.", caplog)
 
 
 def test_position_adjust(mocker, default_conf_usdt, fee) -> None:
