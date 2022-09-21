@@ -205,9 +205,13 @@ class IFreqaiModel(ABC):
 
             if retrain:
                 self.train_timer('start')
-                self.extract_data_and_train_model(
-                    new_trained_timerange, pair, strategy, dk, data_load_timerange
-                )
+                try:
+                    self.extract_data_and_train_model(
+                        new_trained_timerange, pair, strategy, dk, data_load_timerange
+                    )
+                except Exception as msg:
+                    logger.warning(f'Training {pair} raised exception {msg}, skipping.')
+
                 self.train_timer('stop')
 
                 # only rotate the queue after the first has been trained.
@@ -702,7 +706,8 @@ class IFreqaiModel(ABC):
         """
         current_pairlist = self.config.get("exchange", {}).get("pair_whitelist")
         if not self.dd.pair_dict:
-            logger.info('Set fresh train queue from whitelist.')
+            logger.info('Set fresh train queue from whitelist. '
+                        f'Queue: {current_pairlist}')
             return deque(current_pairlist)
 
         best_queue = deque()
@@ -711,12 +716,13 @@ class IFreqaiModel(ABC):
                                   key=lambda k: k[1]['trained_timestamp'])
         for pair in pair_dict_sorted:
             if pair[0] in current_pairlist:
-                best_queue.appendleft(pair[0])
+                best_queue.append(pair[0])
         for pair in current_pairlist:
             if pair not in best_queue:
                 best_queue.appendleft(pair)
 
-        logger.info('Set existing queue from trained timestamps.')
+        logger.info('Set existing queue from trained timestamps. '
+                    f'Best approximation queue: {best_queue}')
         return best_queue
 
     # Following methods which are overridden by user made prediction models.
