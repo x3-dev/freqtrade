@@ -1,5 +1,6 @@
 
 import logging
+from copy import deepcopy
 from telegram import Bot, ParseMode
 from telegram.error import BadRequest, NetworkError, TelegramError
 
@@ -30,45 +31,19 @@ class Telegram(RPCHandler):
         self._init()
 
     def _init(self) -> None:
-        self._bot = Bot(self._config['channel']['token'])
-
-
-    def send_msg(self, msg: dict) -> None:
-        """ Send a message to telegram channel """
-
-        default_noti = 'on'
-        msg_type = msg['type']
-
-        noti = ''
-        if msg_type == RPCMessageType.SELL:
-            sell_noti = self._config['channel'].get('notification_settings', {}).get(str(msg_type), {})
-            # For backward compatibility sell still can be string
-            if isinstance(sell_noti, str):
-                noti = sell_noti
-            else:
-                noti = sell_noti.get(str(msg['sell_reason']), default_noti)
-        else:
-            noti = self._config['channel'].get('notification_settings', {}).get(str(msg_type), default_noti)
-
-        if noti == 'off':
-            logger.info(f"Notification '{msg_type}' not sent.")
-            # Notification disabled
-            return
-
-        message = self.compose_message(msg, msg_type)
-        self._send_msg(message, msg_type, parse_mode=ParseMode.HTML, disable_notification=(noti == 'silent'))
+        self._bot = Bot(self._config['telegram']['token'])
 
 
     def _send_msg(self, msg: str, msg_type: RPCMessageType, parse_mode: str = ParseMode.HTML, disable_notification: bool = False) -> None:
-        chat_ids = []
+        chat_ids = list()
         master_ids = self._config['channel'].get('master', [])
-        slave = self._config['channel'].get('chat_id', '')
         if len(master_ids) and msg_type not in [RPCMessageType.STARTUP]:
             for master in master_ids:
                 for name,id in master.items():
                     namespace = name.split('-')[0]
                     chat_ids.append(id)
 
+        slave = self._config['telegram'].get('chat_id', '')
         if slave and msg_type not in [RPCMessageType.STARTUP, RPCMessageType.STATUS]:
             chat_ids.append(slave)
 
@@ -97,44 +72,81 @@ class Telegram(RPCHandler):
                 )
 
 
-    def _format_buy_msg(self, msg: dict) -> str:
+    def send_msg(self, msg: dict) -> None:
+        """ Send a message to telegram channel """
+
+        default_noti = 'on'
+        msg_type = msg['type']
+
+        noti = ''
+        if msg_type == RPCMessageType.EXIT:
+            sell_noti = self._config['telegram'].get('notification_settings', {}).get(str(msg_type), {})
+            # For backward compatibility sell still can be string
+            if isinstance(sell_noti, str):
+                noti = sell_noti
+            else:
+                noti = sell_noti.get(str(msg['exit_reason']), default_noti)
+        else:
+            noti = self._config['telegram'].get('notification_settings', {}).get(str(msg_type), default_noti)
+
+        if noti == 'off':
+            logger.info(f"Notification '{msg_type}' not sent.")
+            # Notification disabled
+            return
+
+        message = self.compose_message(deepcopy(msg), msg_type)
+        if message:
+            self._send_msg(message, msg_type, parse_mode=ParseMode.HTML, disable_notification=(noti=='silent'))
+
+
+    def _format_entry_msg(self, msg: dict) -> str:
         msg['stake_amount_fiat'] = 0.0
         if self._rpc._fiat_converter:
             msg['stake_amount_fiat'] = self._rpc._fiat_converter.convert_amount(
                 msg['stake_amount'], msg['stake_currency'], msg['fiat_currency']
             )
 
-        is_fill = bool(msg['type'] == RPCMessageType.BUY_FILL)
+        is_fill = msg['type'] in [RPCMessageType.ENTRY_FILL]
         msg['emoji'] = '\N{SPARKLE}' if is_fill else '\N{LARGE BLUE DIAMOND}'
+        entry_side = ({'enter': 'Long', 'entered': 'Longed'} if msg['direction'] == 'Long' else {'enter': 'Short', 'entered': 'Shorted'})
 
         message = [f"{msg['emoji']} <b>{msg['exchange'].upper()}:::{msg['uid']}, #{msg['trade_id']}</b>"]
-        message += [f"* <em>Order - BUY - {'filled' if is_fill else 'created'}, {msg['pair']}</em>"]
-        if msg.get('buy_tag', None):
-            message += [f"- BUY Tag: {msg['buy_tag']}"]
+        message += [f"* <em>Order - ENTRY - {entry_side['entered'] if is_fill else entry_side['enter']}, {msg['pair']}</em>"]
+        message += [self._add_analyzed_candle(msg['pair'])]
+        if msg.get('enter_tag'):
+            message += [f"- ENTRY Tag: {msg['enter_tag']}"]
         message += [f"- Amount: {msg['amount']:.4f}"]
 
-        if msg['type'] == RPCMessageType.BUY_FILL:
+        if msg.get('leverage') and msg.get('leverage', 1.0) != 1.0:
+            message += [f"- Leverage: {msg['leverage']}"]
+
+        if msg['type'] == RPCMessageType.ENTRY_FILL:
             message += [f"- Rate, open: {msg['open_rate']:.4f}"]
-        elif msg['type'] == RPCMessageType.BUY:
+        elif msg['type'] == RPCMessageType.ENTRY:
             message += [f"- Rate, open: {msg['limit']:.4f}"]
             message += [f"- Rate, current: {msg['current_rate']:.4f}"]
 
         total = f"- Total: {round_coin_value(msg['stake_amount'], msg['stake_currency'])}"
-        if msg.get('fiat_currency', None):
+        if msg.get('fiat_currency'):
             total += f" ({round_coin_value(msg['stake_amount_fiat'], msg['fiat_currency'])})"
         message += [total]
         return '\n'.join(message)
 
 
-    def _format_sell_msg(self, msg: dict) -> str:
+    def _format_exit_msg(self, msg: dict) -> str:
         msg['amount'] = round(msg['amount'], 4)
         msg['profit_percent'] = round(msg['profit_ratio'] * 100, 2)
         msg['duration'] = msg['close_date'].replace(microsecond=0) - msg['open_date'].replace(microsecond=0)
         msg['duration_min'] = msg['duration'].total_seconds() / 60
 
-        is_fill = bool(msg['type'] == RPCMessageType.SELL_FILL)
-        msg['buy_tag'] = msg['buy_tag'] if 'buy_tag' in msg.keys() else None
+        is_fill = msg['type'] in [RPCMessageType.EXIT_FILL]
+        is_sub_trade = msg.get('sub_trade')
+        is_sub_profit = msg['profit_amount'] != msg.get('cumulative_profit')
+        profit_prefix = ('Sub ' if is_sub_profit else 'Cumulative ') if is_sub_trade else ''
+
+        msg['enter_tag'] = msg['enter_tag'] if "enter_tag" in msg.keys() else None
         msg['emoji'] = '\N{LARGE RED CIRCLE}' if is_fill else self._get_sell_emoji(msg)
+        msg['leverage_text'] = (f"- Leverage: {msg['leverage']:.1f}" if msg.get('leverage') and msg.get('leverage', 1.0) != 1.0 else "")
 
         msg['profit_extra'] = None
         if (all(prop in msg for prop in ['gain', 'fiat_currency', 'stake_currency']) and self._rpc._fiat_converter):
@@ -145,47 +157,74 @@ class Telegram(RPCHandler):
             )
             msg['profit_extra'] = f"{msg['profit_amount']:.2f} {msg['stake_currency']} ({msg['profit_fiat']:.2f} {msg['fiat_currency']})"
 
-        message = [f"{msg['emoji']} <b>{msg['exchange']}:::{msg['uid']}, #{msg['trade_id']}</b>"]
-        message += [f"* <em>Order - SELL - {'filled' if is_fill else 'created'}, {msg['pair']}</em>"]
+        is_sub_trade = msg.get('sub_trade')
+        is_sub_profit = msg['profit_amount'] != msg.get('cumulative_profit')
+        profit_prefix = ('Sub ' if is_sub_profit else 'Cumulative ') if is_sub_trade else ''
 
-        message += [f"- {'Profit, trade' if is_fill else 'Profit, take'}: {msg['profit_percent']}%"]
-        if msg.get('profit_extra', None):
+        cp_extra = ''
+        if is_sub_profit and is_sub_trade:
+            if self._rpc._fiat_converter:
+                cp_fiat = self._rpc._fiat_converter.convert_amount(
+                    msg['cumulative_profit'], msg['stake_currency'], msg['fiat_currency'])
+                cp_extra = f" / {cp_fiat:.3f} {msg['fiat_currency']}"
+            else:
+                cp_extra = ''
+            cp_extra = f"- Cumulative Profit: ({msg['cumulative_profit']:.4f} {msg['stake_currency']}{cp_extra})"
+
+        message = [f"{msg['emoji']} <b>{msg['exchange']}:::{msg['uid']}, #{msg['trade_id']}</b>"]
+        message += [f"* <em>Order - EXIT - {'exited' if is_fill else 'exiting'}, {msg['pair']}</em>"]
+        message += [f"- {f'{profit_prefix}Profit, trade' if is_fill else f'{profit_prefix}Profit, unrealized'}: ({cp_extra}) {msg['profit_percent']}%"]
+
+        if msg.get('profit_extra'):
             message += [f"- {msg['gain'].capitalize()}: {msg['profit_extra']}"]
 
-        message += [f"- BUY Tag: {msg['buy_tag']}"]
-        if msg.get('exit_tag', None):
-            message += [f"- SELL Tag: {msg['exit_tag']}"]
-        message += [f"- Reason: {msg['sell_reason'] and msg['sell_reason'].upper().replace('_', ' ')}"]
+        message += [f"- ENTER Tag: {msg['enter_tag']}"]
+        if msg.get('exit_tag'):
+            message += [f"- EXIT Tag: {msg['exit_tag']}"]
+        message += [f"- Reason: {msg['exit_reason'] and msg['exit_reason'].upper().replace('_', ' ')}"]
         message += [f"- Duration: {msg['duration']} ({msg['duration_min']:.1f}m)"]
         message += [f"- Amount: {msg['amount']:.4f}"]
+        message += [f"- Direction:* {msg['direction']}"]
         message += [f"- Rate, open: {msg['open_rate']:.4f}"]
 
-        if msg['type'] == RPCMessageType.SELL:
+        if msg['type'] == RPCMessageType.EXIT:
             message += [f"- Rate, current: {msg['current_rate']:.4f}"]
-            message += [f"- Rate, close: {msg['limit']:.4f}"]
+            if msg['order_rate']:
+                message += [f"- Rate, exit: {msg['order_rate']:.4f}"]
 
-        elif msg['type'] == RPCMessageType.SELL_FILL:
-            message += [f"- Rate, close: {msg['limit']:.4f}"]
+        elif msg['type'] == RPCMessageType.EXIT_FILL:
+            message += [f"- Rate, close: {msg['close_rate']:.4f}"]
+
+        if msg.get('sub_trade'):
+            if self._rpc._fiat_converter:
+                msg['stake_amount_fiat'] = self._rpc._fiat_converter.convert_amount(msg['stake_amount'], msg['stake_currency'], msg['fiat_currency'])
+            else:
+                msg['stake_amount_fiat'] = 0
+            rem = round_coin_value(msg['stake_amount'], msg['stake_currency'])
+            message += [f"- Remaining:* ({rem}"]
+
+            if msg.get('fiat_currency', None):
+                message += f", {round_coin_value(msg['stake_amount_fiat'], msg['fiat_currency'])}"
         return '\n'.join(message)
 
 
     def compose_message(self, msg: dict, msg_type: RPCMessageType) -> str:
-        message = 'NONE'
+        message = None
         msg['uid'] = self._config.get('uid')
         msg['exchange'] = self._config.get('exchange').get('name').upper()
 
-        if msg_type in [RPCMessageType.BUY, RPCMessageType.BUY_FILL]:
-            message = self._format_buy_msg(msg)
+        if msg_type in [RPCMessageType.ENTRY, RPCMessageType.ENTRY_FILL]:
+            message = self._format_entry_msg(msg)
 
-        elif msg_type in [RPCMessageType.SELL, RPCMessageType.SELL_FILL]:
-            message = self._format_sell_msg(msg)
+        elif msg_type in [RPCMessageType.EXIT, RPCMessageType.EXIT_FILL]:
+            message = self._format_exit_msg(msg)
 
-        elif msg_type in (RPCMessageType.BUY_CANCEL, RPCMessageType.SELL_CANCEL):
+        elif msg_type in (RPCMessageType.ENTRY_CANCEL, RPCMessageType.EXIT_CANCEL):
             emoji = '\N{ANGER SYMBOL}'
-            msg['side'] = 'BUY' if msg['type'] == RPCMessageType.BUY_CANCEL else 'SELL'
+            msg['message_side'] = 'enter' if msg['type'] == RPCMessageType.ENTRY_CANCEL else 'exit'
             message = [f"{emoji} <b>{msg['exchange']}:::{msg['uid']}, #{msg['trade_id']}</b>"]
-            message += [f"<em>* Order - {msg['side']} - {msg['pair']}, canceled</em>"]
             message += [f"- Reason: {msg['reason']}"]
+            message += [f"<em>* Order - {msg['message_side']} - {msg['pair']}, {'cancelling partial' if msg.get('sub_trade') else 'canceled'}</em>"]
             message = '\n'.join(message)
 
         elif msg_type == RPCMessageType.PROTECTION_TRIGGER:
@@ -210,8 +249,12 @@ class Telegram(RPCHandler):
             emoji = '\N{GEAR}'
             message = f"{emoji} - <b>{msg['exchange']}:::{msg['uid']}</b> -\n- Type: {msg['type']}\n- <em>{msg['status']}</em> -"
 
+        elif msg_type == RPCMessageType.STRATEGY_MSG:
+            message = f"{msg['msg']}"
+
         else:
-            raise Warning(f"{msg.get('exchange', None)}:::{msg.get('uid', None)} Unknown message type: {msg_type}")
+            logger.debug("Unknown message type: %s", msg_type)
+            # raise Warning(f"{msg.get('exchange', None)}:::{msg.get('uid', None)} Unknown message type: {msg_type}")
 
         # logger.info(f"Proccessing to message type {msg_type} | body: {msg}")
         return message
