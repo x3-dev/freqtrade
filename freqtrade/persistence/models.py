@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 _SQL_DOCS_URL = 'http://docs.sqlalchemy.org/en/latest/core/engines.html#database-urls'
 
 
-def init_db(config: Dict) -> None:
+def init_db(config: dict) -> None:
     """
     Initializes this module with the given config,
     registers all known command handlers
