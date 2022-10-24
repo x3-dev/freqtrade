@@ -105,9 +105,9 @@ class Telegram(RPCHandler):
         msg['emoji'] = '\N{SPARKLE}' if is_fill else '\N{LARGE BLUE DIAMOND}'
         entry_side = ({'enter': 'Long', 'entered': 'Longed'} if msg['direction'] == 'Long' else {'enter': 'Short', 'entered': 'Shorted'})
 
-        message = [f"{msg['emoji']} <b>{msg['exchange'].upper()}:::{msg['uid']}, #{msg['trade_id']}</b>"]
+        message = [self._add_analyzed_candle(msg['pair'])]
+        message += [f"{msg['emoji']} <b>{msg['exchange'].upper()}:::{msg['uid']}, #{msg['trade_id']}</b>"]
         message += [f"* <em>Order - ENTRY - {entry_side['entered'] if is_fill else entry_side['enter']}, {msg['pair']}</em>"]
-        message += [self._add_analyzed_candle(msg['pair'])]
         if msg.get('enter_tag'):
             message += [f"- ENTRY Tag: {msg['enter_tag']}"]
         message += [f"- Amount: {msg['amount']:.4f}"]
