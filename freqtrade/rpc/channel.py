@@ -74,14 +74,11 @@ class Telegram(RPCHandler):
 
     def send_msg(self, msg: dict) -> None:
         """ Send a message to telegram channel """
-
         default_noti = 'on'
         msg_type = msg['type']
-
         noti = ''
         if msg_type == RPCMessageType.EXIT:
             sell_noti = self._config['telegram'].get('notification_settings', {}).get(str(msg_type), {})
-            # For backward compatibility sell still can be string
             if isinstance(sell_noti, str):
                 noti = sell_noti
             else:
@@ -91,9 +88,7 @@ class Telegram(RPCHandler):
 
         if noti == 'off':
             logger.info(f"Notification '{msg_type}' not sent.")
-            # Notification disabled
             return
-
         message = self.compose_message(deepcopy(msg), msg_type)
         if message:
             self._send_msg(message, msg_type, parse_mode=ParseMode.HTML, disable_notification=(noti=='silent'))
@@ -123,7 +118,7 @@ class Telegram(RPCHandler):
         if msg['type'] == RPCMessageType.ENTRY_FILL:
             message += [f"- Rate, open: {msg['open_rate']:.4f}"]
         elif msg['type'] == RPCMessageType.ENTRY:
-            message += [f"- Rate, open: {msg['limit']:.4f}"]
+            message += [f"- Rate, open: {msg['open_rate']:.4f}"]
             message += [f"- Rate, current: {msg['current_rate']:.4f}"]
 
         total = f"- Total: {round_coin_value(msg['stake_amount'], msg['stake_currency'])}"
@@ -173,7 +168,7 @@ class Telegram(RPCHandler):
 
         message = [f"{msg['emoji']} <b>{msg['exchange']}:::{msg['uid']}, #{msg['trade_id']}</b>"]
         message += [f"* <em>Order - EXIT - {'exited' if is_fill else 'exiting'}, {msg['pair']}</em>"]
-        message += [f"- {f'{profit_prefix}Profit, trade' if is_fill else f'{profit_prefix}Profit, unrealized'}: ({cp_extra}) {msg['profit_percent']}%"]
+        message += [f"- {f'{profit_prefix}Profit, trade' if is_fill else f'{profit_prefix}Profit, unrealized'}: {cp_extra} {msg['profit_percent']}%"]
 
         if msg.get('profit_extra'):
             message += [f"- {msg['gain'].capitalize()}: {msg['profit_extra']}"]
@@ -184,7 +179,7 @@ class Telegram(RPCHandler):
         message += [f"- Reason: {msg['exit_reason'] and msg['exit_reason'].upper().replace('_', ' ')}"]
         message += [f"- Duration: {msg['duration']} ({msg['duration_min']:.1f}m)"]
         message += [f"- Amount: {msg['amount']:.4f}"]
-        message += [f"- Direction:* {msg['direction']}"]
+        message += [f"- Direction: {msg['direction']}"]
         message += [f"- Rate, open: {msg['open_rate']:.4f}"]
 
         if msg['type'] == RPCMessageType.EXIT:
@@ -250,7 +245,7 @@ class Telegram(RPCHandler):
             message = f"{emoji} - <b>{msg['exchange']}:::{msg['uid']}</b> -\n- Type: {msg['type']}\n- <em>{msg['status']}</em> -"
 
         elif msg_type == RPCMessageType.STRATEGY_MSG:
-            message = f"{msg['msg']}"
+            message = f"{msg['exchange']}:::{msg['msg']}"
 
         else:
             logger.debug("Unknown message type: %s", msg_type)
