@@ -134,8 +134,8 @@ class Telegram(RPCHandler):
         msg['duration'] = msg['close_date'].replace(microsecond=0) - msg['open_date'].replace(microsecond=0)
         msg['duration_min'] = msg['duration'].total_seconds() / 60
 
-        is_fill = msg['type'] in [RPCMessageType.EXIT_FILL]
         is_sub_trade = msg.get('sub_trade')
+        is_fill = msg['type'] in [RPCMessageType.EXIT_FILL]
         is_sub_profit = msg['profit_amount'] != msg.get('cumulative_profit')
         profit_prefix = ('Sub ' if is_sub_profit else 'Cumulative ') if is_sub_trade else ''
 
@@ -152,18 +152,10 @@ class Telegram(RPCHandler):
             )
             msg['profit_extra'] = f"{msg['profit_amount']:.2f} {msg['stake_currency']} ({msg['profit_fiat']:.2f} {msg['fiat_currency']})"
 
-        is_sub_trade = msg.get('sub_trade')
-        is_sub_profit = msg['profit_amount'] != msg.get('cumulative_profit')
-        profit_prefix = ('Sub ' if is_sub_profit else 'Cumulative ') if is_sub_trade else ''
-
         cp_extra = ''
         if is_sub_profit and is_sub_trade:
-            if self._rpc._fiat_converter:
-                cp_fiat = self._rpc._fiat_converter.convert_amount(
-                    msg['cumulative_profit'], msg['stake_currency'], msg['fiat_currency'])
-                cp_extra = f" / {cp_fiat:.3f} {msg['fiat_currency']}"
-            else:
-                cp_extra = ''
+            cp_fiat = self._rpc._fiat_converter.convert_amount(msg['cumulative_profit'], msg['stake_currency'], msg['fiat_currency'])
+            cp_extra = f" / {msg['fiat_currency']} {cp_fiat:.3f}"
             cp_extra = f"- Cumulative Profit: ({msg['cumulative_profit']:.4f} {msg['stake_currency']}{cp_extra})"
 
         message = [f"{msg['emoji']} <b>{msg['exchange']}:::{msg['uid']}, #{msg['trade_id']}</b>"]
@@ -173,7 +165,7 @@ class Telegram(RPCHandler):
         if msg.get('profit_extra'):
             message += [f"- {msg['gain'].capitalize()}: {msg['profit_extra']}"]
 
-        message += [f"- ENTER Tag: {msg['enter_tag']}"]
+        message += [f"- ENTRY Tag: {msg['enter_tag']}"]
         if msg.get('exit_tag'):
             message += [f"- EXIT Tag: {msg['exit_tag']}"]
         message += [f"- Reason: {msg['exit_reason'] and msg['exit_reason'].upper().replace('_', ' ')}"]
@@ -195,8 +187,7 @@ class Telegram(RPCHandler):
                 msg['stake_amount_fiat'] = self._rpc._fiat_converter.convert_amount(msg['stake_amount'], msg['stake_currency'], msg['fiat_currency'])
             else:
                 msg['stake_amount_fiat'] = 0
-            rem = round_coin_value(msg['stake_amount'], msg['stake_currency'])
-            message += [f"- Remaining:* ({rem}"]
+            message += [f"- Remaining: {round_coin_value(msg['stake_amount'], msg['stake_currency'])}"]
 
             if msg.get('fiat_currency', None):
                 message += f", {round_coin_value(msg['stake_amount_fiat'], msg['fiat_currency'])}"
@@ -204,10 +195,10 @@ class Telegram(RPCHandler):
 
 
     def compose_message(self, msg: dict, msg_type: RPCMessageType) -> str:
-        message = None
         msg['uid'] = self._config.get('uid')
         msg['exchange'] = self._config.get('exchange').get('name').upper()
 
+        message = None
         if msg_type in [RPCMessageType.ENTRY, RPCMessageType.ENTRY_FILL]:
             message = self._format_entry_msg(msg)
 
@@ -218,8 +209,8 @@ class Telegram(RPCHandler):
             emoji = '\N{ANGER SYMBOL}'
             msg['message_side'] = 'enter' if msg['type'] == RPCMessageType.ENTRY_CANCEL else 'exit'
             message = [f"{emoji} <b>{msg['exchange']}:::{msg['uid']}, #{msg['trade_id']}</b>"]
-            message += [f"- Reason: {msg['reason']}"]
             message += [f"<em>* Order - {msg['message_side']} - {msg['pair']}, {'cancelling partial' if msg.get('sub_trade') else 'canceled'}</em>"]
+            message += [f"- Reason: {msg['reason']}"]
             message = '\n'.join(message)
 
         elif msg_type == RPCMessageType.PROTECTION_TRIGGER:
@@ -248,6 +239,7 @@ class Telegram(RPCHandler):
             message = f"{msg['exchange']}:::{msg['msg']}"
 
         else:
+            message = f"{msg['exchange']}:::{msg['msg']}"
             logger.debug("Unknown message type: %s", msg_type)
             # raise Warning(f"{msg.get('exchange', None)}:::{msg.get('uid', None)} Unknown message type: {msg_type}")
 
