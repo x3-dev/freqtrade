@@ -33,7 +33,6 @@ class Telegram(RPCHandler):
     def _init(self) -> None:
         self._bot = Bot(self._config['telegram']['token'])
 
-
     def _send_msg(self, msg: str, msg_type: RPCMessageType, parse_mode: str = ParseMode.HTML, disable_notification: bool = False) -> None:
         chat_ids = list()
         master_ids = self._config['channel'].get('master', [])
@@ -71,7 +70,6 @@ class Telegram(RPCHandler):
                     'TelegramError: %s! Giving up on that message.', err.message
                 )
 
-
     def send_msg(self, msg: dict) -> None:
         """ Send a message to telegram channel """
         default_noti = 'on'
@@ -92,7 +90,6 @@ class Telegram(RPCHandler):
         message = self.compose_message(deepcopy(msg), msg_type)
         if message:
             self._send_msg(message, msg_type, parse_mode=ParseMode.HTML, disable_notification=(noti=='silent'))
-
 
     def _format_entry_msg(self, msg: dict) -> str:
         msg['stake_amount_fiat'] = 0.0
@@ -126,7 +123,6 @@ class Telegram(RPCHandler):
             total += f" ({round_coin_value(msg['stake_amount_fiat'], msg['fiat_currency'])})"
         message += [total]
         return '\n'.join(message)
-
 
     def _format_exit_msg(self, msg: dict) -> str:
         msg['amount'] = round(msg['amount'], 4)
@@ -193,7 +189,6 @@ class Telegram(RPCHandler):
                 message += f", {round_coin_value(msg['stake_amount_fiat'], msg['fiat_currency'])}"
         return '\n'.join(message)
 
-
     def compose_message(self, msg: dict, msg_type: RPCMessageType) -> str:
         msg['uid'] = self._config.get('uid')
         msg['exchange'] = self._config.get('exchange').get('name').upper()
@@ -245,7 +240,6 @@ class Telegram(RPCHandler):
 
         # logger.info(f"Proccessing to message type {msg_type} | body: {msg}")
         return message
-
 
     def _get_sell_emoji(self, msg: dict) -> str:
         if float(msg['profit_percent']) >= 5.0:
