@@ -149,7 +149,7 @@ class RPC:
                 config.get('max_entry_position_adjustment', -1)
                 if config.get('max_entry_position_adjustment') != float('inf')
                 else -1),
-            'sell_profit_offset': config.get('sell_profit_offset', 0.0),
+            'exit_profit_offset': config.get('exit_profit_offset', 0.0),
         }
         return val
 

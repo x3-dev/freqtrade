@@ -234,7 +234,6 @@ class Telegram(RPCHandler):
             message = f"{msg['exchange']}:::{msg['msg']}"
 
         else:
-            message = f"{msg['exchange']}:::{msg['msg']}"
             logger.debug("Unknown message type: %s", msg_type)
             # raise Warning(f"{msg.get('exchange', None)}:::{msg.get('uid', None)} Unknown message type: {msg_type}")
 
