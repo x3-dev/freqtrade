@@ -188,7 +188,7 @@ class ShowConfig(BaseModel):
     runmode: str
     position_adjustment_enable: bool
     max_entry_position_adjustment: int
-    sell_profit_offset: Optional[float]
+    exit_profit_offset: Optional[float]
 
 
 class OrderSchema(BaseModel):

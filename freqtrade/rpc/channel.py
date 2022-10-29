@@ -179,14 +179,12 @@ class Telegram(RPCHandler):
             message += [f"- Rate, close: {msg['close_rate']:.4f}"]
 
         if msg.get('sub_trade'):
+            msg['stake_amount_fiat'] = 0
             if self._rpc._fiat_converter:
                 msg['stake_amount_fiat'] = self._rpc._fiat_converter.convert_amount(msg['stake_amount'], msg['stake_currency'], msg['fiat_currency'])
-            else:
-                msg['stake_amount_fiat'] = 0
-            message += [f"- Remaining: {round_coin_value(msg['stake_amount'], msg['stake_currency'])}"]
-
-            if msg.get('fiat_currency', None):
-                message += f", {round_coin_value(msg['stake_amount_fiat'], msg['fiat_currency'])}"
+            message += [
+                f"- Remaining: {round_coin_value(msg['stake_amount'], msg['stake_currency'])} {(round_coin_value(msg['stake_amount_fiat'], msg['fiat_currency'])) if msg.get('fiat_currency') else ''}"
+            ]
         return '\n'.join(message)
 
     def compose_message(self, msg: dict, msg_type: RPCMessageType) -> str:
@@ -202,9 +200,11 @@ class Telegram(RPCHandler):
 
         elif msg_type in (RPCMessageType.ENTRY_CANCEL, RPCMessageType.EXIT_CANCEL):
             emoji = '\N{ANGER SYMBOL}'
-            msg['message_side'] = 'enter' if msg['type'] == RPCMessageType.ENTRY_CANCEL else 'exit'
+            msg['message_side'] = 'ENTRY' if msg['type'] == RPCMessageType.ENTRY_CANCEL else 'EXIT'
             message = [f"{emoji} <b>{msg['exchange']}:::{msg['uid']}, #{msg['trade_id']}</b>"]
-            message += [f"<em>* Order - {msg['message_side']} - {msg['pair']}, {'cancelling partial' if msg.get('sub_trade') else 'canceled'}</em>"]
+            message += [
+                f"<em>* Order - {msg['message_side']} - {msg['pair']}, {'cancelling partially' if msg.get('sub_trade') else 'canceled'}</em>"
+            ]
             message += [f"- Reason: {msg['reason']}"]
             message = '\n'.join(message)
 
@@ -218,20 +218,23 @@ class Telegram(RPCHandler):
 
         elif msg_type == RPCMessageType.STATUS:
             emoji = '\N{GEAR}'
-            message = [f"{emoji} - <b>{msg['exchange']}:::{msg['uid']}</b> -"]
+            message = [f"{emoji} <b>{msg['exchange']}:::{msg['uid']}</b>"]
             message += [f"- Status: {msg['status']}"]
             message = '\n'.join(message)
 
         elif msg_type == RPCMessageType.WARNING:
             emoji = '\N{WARNING SIGN}'
-            message = f"{emoji} - <b>{msg['exchange']}:::{msg['uid']}</b> -\n- Warning: {msg['type']} / {msg['status']}"
+            message = f"{emoji} <b>{msg['exchange']}:::{msg['uid']}</b>\n- Warning: {msg['type']} / {msg['status']}"
 
         elif msg_type == RPCMessageType.STARTUP:
             emoji = '\N{GEAR}'
-            message = f"{emoji} - <b>{msg['exchange']}:::{msg['uid']}</b> -\n- Type: {msg['type']}\n- <em>{msg['status']}</em> -"
+            message = f"{emoji} <b>{msg['exchange']}:::{msg['uid']}</b>\n- Type: {msg['type']}\n- <em>{msg['status']}</em> -"
 
         elif msg_type == RPCMessageType.STRATEGY_MSG:
-            message = f"{msg['exchange']}:::{msg['msg']}"
+            emoji = '\N{GEAR}'
+            message = [f"{emoji} <b>{msg['exchange']}:::{msg['uid']}</b>"]
+            message += [f"- Status: {msg['msg']}"]
+            message = '\n'.join(message)
 
         else:
             logger.debug("Unknown message type: %s", msg_type)
