@@ -354,13 +354,19 @@ class FreqaiDataKitchen:
         :param df: Dataframe to be standardized
         """
 
-        for item in df.keys():
-            df[item] = (
-                2
-                * (df[item] - self.data[f"{item}_min"])
-                / (self.data[f"{item}_max"] - self.data[f"{item}_min"])
-                - 1
-            )
+        train_max = [None] * len(df.keys())
+        train_min = [None] * len(df.keys())
+
+        for i, item in enumerate(df.keys()):
+            train_max[i] = self.data[f"{item}_max"]
+            train_min[i] = self.data[f"{item}_min"]
+
+        train_max_series = pd.Series(train_max, index=df.keys())
+        train_min_series = pd.Series(train_min, index=df.keys())
+
+        df = (
+            2 * (df - train_min_series) / (train_max_series - train_min_series) - 1
+        )
 
         return df
 
@@ -960,7 +966,7 @@ class FreqaiDataKitchen:
             append_df[f"{label}_std"] = self.data["labels_std"][label]
 
         for extra_col in self.data["extra_returns_per_train"]:
-            append_df["{extra_col}"] = self.data["extra_returns_per_train"][extra_col]
+            append_df[f"{extra_col}"] = self.data["extra_returns_per_train"][extra_col]
 
         append_df["do_predict"] = do_predict
         if self.freqai_config["feature_parameters"].get("DI_threshold", 0) > 0:
