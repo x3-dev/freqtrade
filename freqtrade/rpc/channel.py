@@ -103,8 +103,8 @@ class Telegram(RPCHandler):
         entry_side = ({'enter': 'Long', 'entered': 'Longed'} if msg['direction'] == 'Long' else {'enter': 'Short', 'entered': 'Shorted'})
 
         message = [self._add_analyzed_candle(msg['pair'])]
-        message += [f"{msg['emoji']} <b>{msg['exchange'].upper()}:::{msg['uid']}, #{msg['trade_id']}</b>"]
-        message += [f"* <em>Order - ENTRY - {entry_side['entered'] if is_fill else entry_side['enter']}, {msg['pair']}</em>"]
+        message += [f"{msg['emoji']} <b>{msg['exchange'].upper()}:::{msg['uid']}</b>"]
+        message += [f"* <em>Order, #{msg['trade_id']}, {msg['pair']} ::: {entry_side['entered'] if is_fill else entry_side['enter']}</em>"]
         if msg.get('enter_tag'):
             message += [f"- ENTRY Tag: {msg['enter_tag']}"]
         message += [f"- Amount: {msg['amount']:.4f}"]
@@ -113,10 +113,10 @@ class Telegram(RPCHandler):
             message += [f"- Leverage: {msg['leverage']}"]
 
         if msg['type'] == RPCMessageType.ENTRY_FILL:
-            message += [f"- Rate, open: {msg['open_rate']:.4f}"]
+            message += [f"- Rate, open: {msg['open_rate']:.8f}"]
         elif msg['type'] == RPCMessageType.ENTRY:
-            message += [f"- Rate, open: {msg['open_rate']:.4f}"]
-            message += [f"- Rate, current: {msg['current_rate']:.4f}"]
+            message += [f"- Rate, open: {msg['open_rate']:.8f}"]
+            message += [f"- Rate, current: {msg['current_rate']:.8f}"]
 
         total = f"- Total: {round_coin_value(msg['stake_amount'], msg['stake_currency'])}"
         if msg.get('fiat_currency'):
@@ -146,7 +146,7 @@ class Telegram(RPCHandler):
                 msg['stake_currency'],
                 msg['fiat_currency']
             )
-            msg['profit_extra'] = f"{msg['profit_amount']:.2f} {msg['stake_currency']} ({msg['profit_fiat']:.2f} {msg['fiat_currency']})"
+            msg['profit_extra'] = f"{msg['profit_amount']:.4f} {msg['stake_currency']} ({msg['profit_fiat']:.4f} {msg['fiat_currency']})"
 
         cp_extra = ''
         if is_sub_profit and is_sub_trade:
@@ -154,8 +154,8 @@ class Telegram(RPCHandler):
             cp_extra = f" / {msg['fiat_currency']} {cp_fiat:.3f}"
             cp_extra = f"- Cumulative Profit: ({msg['cumulative_profit']:.4f} {msg['stake_currency']}{cp_extra})"
 
-        message = [f"{msg['emoji']} <b>{msg['exchange']}:::{msg['uid']}, #{msg['trade_id']}</b>"]
-        message += [f"* <em>Order - EXIT - {'exited' if is_fill else 'exiting'}, {msg['pair']}</em>"]
+        message = [f"{msg['emoji']} <b>{msg['exchange']}:::{msg['uid']}</b>"]
+        message += [f"* <em>Order, #{msg['trade_id']}, {msg['pair']} ::: {'Exited' if is_fill else 'Exiting'}</em>"]
         message += [f"- {f'{profit_prefix}Profit, trade' if is_fill else f'{profit_prefix}Profit, unrealized'}: {cp_extra} {msg['profit_percent']}%"]
 
         if msg.get('profit_extra'):
@@ -168,15 +168,15 @@ class Telegram(RPCHandler):
         message += [f"- Duration: {msg['duration']} ({msg['duration_min']:.1f}m)"]
         message += [f"- Amount: {msg['amount']:.4f}"]
         message += [f"- Direction: {msg['direction']}"]
-        message += [f"- Rate, open: {msg['open_rate']:.4f}"]
+        message += [f"- Rate, open: {msg['open_rate']:.8f}"]
 
         if msg['type'] == RPCMessageType.EXIT:
-            message += [f"- Rate, current: {msg['current_rate']:.4f}"]
+            message += [f"- Rate, current: {msg['current_rate']:.8f}"]
             if msg['order_rate']:
-                message += [f"- Rate, exit: {msg['order_rate']:.4f}"]
+                message += [f"- Rate, exit: {msg['order_rate']:.8f}"]
 
         elif msg['type'] == RPCMessageType.EXIT_FILL:
-            message += [f"- Rate, close: {msg['close_rate']:.4f}"]
+            message += [f"- Rate, close: {msg['close_rate']:.8f}"]
 
         if msg.get('sub_trade'):
             msg['stake_amount_fiat'] = 0
