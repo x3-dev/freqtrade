@@ -64,7 +64,7 @@ class BaseReinforcementLearningModel(IFreqaiModel):
         self.policy_type = self.freqai_info['rl_config']['policy_type']
         self.unset_outlier_removal()
         self.net_arch = self.rl_config.get('net_arch', [128, 128])
-        self.dd.model_type = "stable_baselines"
+        self.dd.model_type = import_str
 
     def unset_outlier_removal(self):
         """
@@ -193,6 +193,10 @@ class BaseReinforcementLearningModel(IFreqaiModel):
                 now = datetime.now(timezone.utc).timestamp()
                 trade_duration = int((now - trade.open_date_utc.timestamp()) / self.base_tf_seconds)
                 current_profit = trade.calc_profit_ratio(current_rate)
+                if trade.is_short:
+                    market_side = 0
+                else:
+                    market_side = 1
 
         return market_side, current_profit, int(trade_duration)
 
