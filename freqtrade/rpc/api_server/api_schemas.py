@@ -373,6 +373,10 @@ class StrategyListResponse(BaseModel):
     strategies: List[str]
 
 
+class FreqAIModelListResponse(BaseModel):
+    freqaimodels: List[str]
+
+
 class StrategyResponse(BaseModel):
     strategy: str
     code: str
@@ -411,6 +415,10 @@ class PairHistory(BaseModel):
         }
 
 
+class BacktestFreqAIInputs(BaseModel):
+    identifier: str
+
+
 class BacktestRequest(BaseModel):
     strategy: str
     timeframe: Optional[str]
@@ -420,6 +428,9 @@ class BacktestRequest(BaseModel):
     stake_amount: Optional[str]
     enable_protections: bool
     dry_run_wallet: Optional[float]
+    backtest_cache: Optional[str]
+    freqaimodel: Optional[str]
+    freqai: Optional[BacktestFreqAIInputs]
 
 
 class BacktestResponse(BaseModel):
