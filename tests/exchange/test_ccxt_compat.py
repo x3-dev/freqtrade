@@ -12,6 +12,7 @@ from typing import Tuple
 
 import pytest
 
+from freqtrade.constants import Config
 from freqtrade.enums import CandleType
 from freqtrade.exchange import timeframe_to_minutes, timeframe_to_prev_date
 from freqtrade.exchange.exchange import Exchange, timeframe_to_msecs
@@ -31,16 +32,18 @@ EXCHANGES = {
         'leverage_tiers_public': False,
         'leverage_in_spot_market': False,
     },
-    # 'binance': {
-    #     'pair': 'BTC/USDT',
-    #     'stake_currency': 'USDT',
-    #     'hasQuoteVolume': True,
-    #     'timeframe': '5m',
-    #     'futures': True,
-    #     'futures_pair': 'BTC/USDT:USDT',
-    #     'leverage_tiers_public': False,
-    #     'leverage_in_spot_market': False,
-    # },
+    'binance': {
+        'pair': 'BTC/USDT',
+        'stake_currency': 'USDT',
+        'use_ci_proxy': True,
+        'hasQuoteVolume': True,
+        'timeframe': '5m',
+        'futures': True,
+        'futures_pair': 'BTC/USDT:USDT',
+        'hasQuoteVolumeFutures': True,
+        'leverage_tiers_public': False,
+        'leverage_in_spot_market': False,
+    },
     'kraken': {
         'pair': 'BTC/USDT',
         'stake_currency': 'USDT',
@@ -64,6 +67,7 @@ EXCHANGES = {
         'timeframe': '5m',
         'futures': True,
         'futures_pair': 'BTC/USDT:USDT',
+        'hasQuoteVolumeFutures': True,
         'leverage_tiers_public': True,
         'leverage_in_spot_market': True,
     },
@@ -72,8 +76,9 @@ EXCHANGES = {
         'stake_currency': 'USDT',
         'hasQuoteVolume': True,
         'timeframe': '5m',
-        'futures_pair': 'BTC/USDT:USDT',
         'futures': True,
+        'futures_pair': 'BTC/USDT:USDT',
+        'hasQuoteVolumeFutures': False,
         'leverage_tiers_public': True,
         'leverage_in_spot_market': True,
     },
@@ -107,8 +112,27 @@ def exchange_conf():
     return config
 
 
+def set_test_proxy(config: Config, use_proxy: bool) -> Config:
+    # Set proxy to test in CI.
+    import os
+    if use_proxy and (proxy := os.environ.get('CI_WEB_PROXY')):
+        config1 = deepcopy(config)
+        config1['exchange']['ccxt_config'] = {
+            "aiohttp_proxy": proxy,
+            'proxies': {
+                'https': proxy,
+                'http': proxy,
+            }
+        }
+        return config1
+
+    return config
+
+
 @pytest.fixture(params=EXCHANGES, scope="class")
 def exchange(request, exchange_conf):
+    exchange_conf = set_test_proxy(
+        exchange_conf, EXCHANGES[request.param].get('use_ci_proxy', False))
     exchange_conf['exchange']['name'] = request.param
     exchange_conf['stake_currency'] = EXCHANGES[request.param]['stake_currency']
     exchange = ExchangeResolver.load_exchange(request.param, exchange_conf, validate=True)
@@ -121,6 +145,8 @@ def exchange_futures(request, exchange_conf, class_mocker):
     if not EXCHANGES[request.param].get('futures') is True:
         yield None, request.param
     else:
+        exchange_conf = set_test_proxy(
+            exchange_conf, EXCHANGES[request.param].get('use_ci_proxy', False))
         exchange_conf = deepcopy(exchange_conf)
         exchange_conf['exchange']['name'] = request.param
         exchange_conf['trading_mode'] = 'futures'
@@ -197,6 +223,25 @@ class TestCCXTExchange():
         assert tickers[pair]['bid'] is not None
         assert 'quoteVolume' in tickers[pair]
         if EXCHANGES[exchangename].get('hasQuoteVolume'):
+            assert tickers[pair]['quoteVolume'] is not None
+
+    def test_ccxt_fetch_tickers_futures(self, exchange_futures: EXCHANGE_FIXTURE_TYPE):
+        exch, exchangename = exchange_futures
+        if not exch or exchangename in ('gateio'):
+            # exchange_futures only returns values for supported exchanges
+            return
+
+        pair = EXCHANGES[exchangename]['pair']
+        pair = EXCHANGES[exchangename].get('futures_pair', pair)
+
+        tickers = exch.get_tickers()
+        assert pair in tickers
+        assert 'ask' in tickers[pair]
+        assert tickers[pair]['ask'] is not None
+        assert 'bid' in tickers[pair]
+        assert tickers[pair]['bid'] is not None
+        assert 'quoteVolume' in tickers[pair]
+        if EXCHANGES[exchangename].get('hasQuoteVolumeFutures'):
             assert tickers[pair]['quoteVolume'] is not None
 
     def test_ccxt_fetch_ticker(self, exchange: EXCHANGE_FIXTURE_TYPE):
