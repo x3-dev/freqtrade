@@ -241,7 +241,6 @@ def get_patched_freqtradebot(mocker, config) -> FreqtradeBot:
     :return: FreqtradeBot
     """
     patch_freqtradebot(mocker, config)
-    config['datadir'] = Path(config['datadir'])
     return FreqtradeBot(config)
 
 
@@ -510,7 +509,7 @@ def get_default_conf(testdatadir):
             "chat_id": "0",
             "notification_settings": {},
         },
-        "datadir": str(testdatadir),
+        "datadir": Path(testdatadir),
         "initial_state": "running",
         "db_url": "sqlite://",
         "user_data_dir": Path("user_data"),
