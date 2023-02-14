@@ -113,8 +113,8 @@ EXCHANGES = {
                 'price': '15.5',
                 'size': '1.1',
                 'funds': '0',
-                'dealFunds': '0.032626',
-                'dealSize': '0.1',
+                'dealFunds': '17.05',
+                'dealSize': '1.1',
                 'fee': '0.000065252',
                 'feeCurrency': 'USDT',
                 'stp': '',
@@ -137,7 +137,7 @@ EXCHANGES = {
                 'tradeType': 'TRADE'
             }],
     },
-    'gateio': {
+    'gate': {
         'pair': 'BTC/USDT',
         'stake_currency': 'USDT',
         'hasQuoteVolume': True,
@@ -147,6 +147,69 @@ EXCHANGES = {
         'hasQuoteVolumeFutures': True,
         'leverage_tiers_public': True,
         'leverage_in_spot_market': True,
+        'sample_order': [
+            {
+                "id": "276266139423",
+                "text": "apiv4",
+                "create_time": "1674493798",
+                "update_time": "1674493798",
+                "create_time_ms": "1674493798550",
+                "update_time_ms": "1674493798550",
+                "status": "closed",
+                "currency_pair": "SOL_USDT",
+                "type": "limit",
+                "account": "spot",
+                "side": "buy",
+                "amount": "1.1",
+                "price": "15.5",
+                "time_in_force": "gtc",
+                "iceberg": "0",
+                "left": "0",
+                "fill_price": "17.05",
+                "filled_total": "17.05",
+                "avg_deal_price": "15.5",
+                "fee": "0.0000018",
+                "fee_currency": "SOL",
+                "point_fee": "0",
+                "gt_fee": "0",
+                "gt_maker_fee": "0",
+                "gt_taker_fee": "0.0015",
+                "gt_discount": True,
+                "rebated_fee": "0",
+                "rebated_fee_currency": "USDT"
+            },
+            {
+                # market order
+                'id': '276401180529',
+                'text': 'apiv4',
+                'create_time': '1674493798',
+                'update_time': '1674493798',
+                'create_time_ms': '1674493798550',
+                'update_time_ms': '1674493798550',
+                'status': 'cancelled',
+                'currency_pair': 'SOL_USDT',
+                'type': 'market',
+                'account': 'spot',
+                'side': 'buy',
+                'amount': '17.05',
+                'price': '0',
+                'time_in_force': 'ioc',
+                'iceberg': '0',
+                'left': '0.0000000016228',
+                'fill_price': '17.05',
+                'filled_total': '17.05',
+                'avg_deal_price': '15.5',
+                'fee': '0',
+                'fee_currency': 'SOL',
+                'point_fee': '0.0199999999967544',
+                'gt_fee': '0',
+                'gt_maker_fee': '0',
+                'gt_taker_fee': '0',
+                'gt_discount': False,
+                'rebated_fee': '0',
+                'rebated_fee_currency': 'USDT'
+            }
+        ],
     },
     'okx': {
         'pair': 'BTC/USDT',
@@ -294,8 +357,8 @@ class TestCCXTExchange():
             'stoploss': 'limit',
             })
 
-        if exchangename == 'gateio':
-            # gateio doesn't have market orders on spot
+        if exchangename == 'gate':
+            # gate doesn't have market orders on spot
             return
         exch.validate_ordertypes({
             'entry': 'market',
@@ -332,6 +395,9 @@ class TestCCXTExchange():
                 assert isinstance(po['timestamp'], int)
                 assert isinstance(po['price'], float)
                 assert po['price'] == 15.5
+                if po['average'] is not None:
+                    assert isinstance(po['average'], float)
+                    assert po['average'] == 15.5
                 assert po['symbol'] == 'SOL/USDT'
                 assert isinstance(po['amount'], float)
                 assert po['amount'] == 1.1
@@ -355,7 +421,7 @@ class TestCCXTExchange():
 
     def test_ccxt_fetch_tickers_futures(self, exchange_futures: EXCHANGE_FIXTURE_TYPE):
         exch, exchangename = exchange_futures
-        if not exch or exchangename in ('gateio'):
+        if not exch or exchangename in ('gate'):
             # exchange_futures only returns values for supported exchanges
             return
 
@@ -395,8 +461,8 @@ class TestCCXTExchange():
         assert len(l2['bids']) >= 1
         l2_limit_range = exch._ft_has['l2_limit_range']
         l2_limit_range_required = exch._ft_has['l2_limit_range_required']
-        if exchangename == 'gateio':
-            # TODO: Gateio is unstable here at the moment, ignoring the limit partially.
+        if exchangename == 'gate':
+            # TODO: Gate is unstable here at the moment, ignoring the limit partially.
             return
         for val in [1, 2, 5, 25, 100]:
             l2 = exch.fetch_l2_order_book(pair, val)
@@ -468,8 +534,7 @@ class TestCCXTExchange():
 
     def test_ccxt__async_get_candle_history(self, exchange: EXCHANGE_FIXTURE_TYPE):
         exc, exchangename = exchange
-        if exchangename in ('binanceus', 'bittrex'):
-            # TODO: reenable binanceus test once downtime "ages out" (2023-02-06)
+        if exchangename in ('bittrex'):
             # For some weired reason, this test returns random lengths for bittrex.
             pytest.skip("Exchange doesn't provide stable ohlcv history")
 
