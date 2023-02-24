@@ -227,7 +227,7 @@ class IFreqaiModel(ABC):
                 logger.warning(f'{pair} not in current whitelist, removing from train queue.')
                 continue
 
-            (_, trained_timestamp, _) = self.dd.get_pair_dict_info(pair)
+            (_, trained_timestamp) = self.dd.get_pair_dict_info(pair)
 
             dk = FreqaiDataKitchen(self.config, self.live, pair)
             (
@@ -285,7 +285,7 @@ class IFreqaiModel(ABC):
         # following tr_train. Both of these windows slide through the
         # entire backtest
         for tr_train, tr_backtest in zip(dk.training_timeranges, dk.backtesting_timeranges):
-            (_, _, _) = self.dd.get_pair_dict_info(pair)
+            (_, _) = self.dd.get_pair_dict_info(pair)
             train_it += 1
             total_trains = len(dk.backtesting_timeranges)
             self.training_timerange = tr_train
@@ -329,6 +329,8 @@ class IFreqaiModel(ABC):
                 dataframe_base_backtest = dataframe.loc[dataframe["date"] < tr_backtest.stopdt, :]
                 dataframe_base_backtest = strategy.set_freqai_targets(
                     dataframe_base_backtest, metadata=metadata)
+
+                tr_train = dk.buffer_timerange(tr_train)
 
                 dataframe_train = dk.slice_dataframe(tr_train, dataframe_base_train)
                 dataframe_backtest = dk.slice_dataframe(tr_backtest, dataframe_base_backtest)
@@ -382,7 +384,7 @@ class IFreqaiModel(ABC):
         """
 
         # get the model metadata associated with the current pair
-        (_, trained_timestamp, return_null_array) = self.dd.get_pair_dict_info(metadata["pair"])
+        (_, trained_timestamp) = self.dd.get_pair_dict_info(metadata["pair"])
 
         # append the historic data once per round
         if self.dd.historic_data:
@@ -614,6 +616,8 @@ class IFreqaiModel(ABC):
             strategy, corr_dataframes, base_dataframes, pair
         )
 
+        new_trained_timerange = dk.buffer_timerange(new_trained_timerange)
+
         unfiltered_dataframe = dk.slice_dataframe(new_trained_timerange, unfiltered_dataframe)
 
         # find the features indicated by strategy and store in datakitchen
@@ -629,8 +633,7 @@ class IFreqaiModel(ABC):
         if self.plot_features:
             plot_feature_importance(model, pair, dk, self.plot_features)
 
-        if self.freqai_info.get("purge_old_models", False):
-            self.dd.purge_old_models()
+        self.dd.purge_old_models()
 
     def set_initial_historic_predictions(
         self, pred_df: DataFrame, dk: FreqaiDataKitchen, pair: str, strat_df: DataFrame
